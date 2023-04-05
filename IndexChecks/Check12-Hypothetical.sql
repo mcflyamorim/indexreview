@@ -64,7 +64,7 @@ IF NOT EXISTS
 
 SET @sqlcmd
     = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                WHERE name in (select Database_name FROM tempdb.dbo.Tab_GetIndexInfo)';
+                WHERE name in (select Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)';
 INSERT INTO #tmpdbs0
 (
     [dbid],

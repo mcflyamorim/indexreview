@@ -36,7 +36,7 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
   DROP TABLE #tmp1
 
-CREATE TABLE #tmp1 (Database_ID INT, Object_ID INT, Index_ID INT, cMin DATETIME, cMAX DATETIME)
+CREATE TABLE #tmp1 (Database_ID INT, Object_ID INT, Index_ID INT, cMin DATETIME, cMax DATETIME)
 CREATE UNIQUE CLUSTERED INDEX ix1 ON #tmp1(Database_ID, Object_ID, Index_ID)
 
 DECLARE @Database_ID INT, @Object_ID INT, @Index_ID INT, @Cmd NVARCHAR(MAX)
@@ -87,11 +87,11 @@ SELECT 'Check 42 - Report Report min value for DateTime/Date columns' AS [Info],
        Table_Name,
        Index_Name,
        Index_Type,
-       Indexed_Columns,
+       indexed_columns,
        Number_Rows AS current_number_of_rows_table,
        #tmp1.cMin,
        #tmp1.cMax,
-       DATEDIFF(YEAR, cMIN, cMAX) AS YearsCnt,
+       DATEDIFF(YEAR, cMin, cMax) AS YearsCnt,
        key_column_name, 
        key_column_data_type,
        'SELECT MIN(' + QUOTENAME(key_column_name) + ') AS cMin, MAX(' + QUOTENAME(key_column_name) + ') AS cMax FROM ' + QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' WITH(NOLOCK) OPTION (MAXDOP 1);' AS Cmd       

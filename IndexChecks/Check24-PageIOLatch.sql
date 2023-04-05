@@ -37,7 +37,7 @@ SELECT TOP 1000
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.Number_Rows AS current_number_of_rows_table,
        a.ReservedSizeInMB,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
@@ -55,7 +55,7 @@ SELECT TOP 1000
    AND a.Table_Name NOT LIKE N'plan_%'
    AND a.Table_Name NOT LIKE N'sys%'
    AND a.Table_Name NOT LIKE N'xml_index_nodes%'
-ORDER BY A.page_io_latch_wait_count DESC,
+ORDER BY a.page_io_latch_wait_count DESC,
          a.Number_Rows DESC, 
          a.Database_Name,
          a.Schema_Name,

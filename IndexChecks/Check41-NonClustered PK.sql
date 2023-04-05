@@ -34,7 +34,7 @@ SELECT 'Check 41 - Heaps with NonClustered PKs with high number of seeks/singlet
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.Number_Rows AS current_number_of_rows_table,
        a.ReservedSizeInMB,
        a.[user_seeks] AS pk_user_seeks,
@@ -64,7 +64,7 @@ SELECT 'Check 41 - Heaps with NonClustered PKs with high number of seeks/singlet
        '/* NumberOfRows = ' + CONVERT(VARCHAR, a.Number_Rows) + '*/' + 
        + NCHAR(13) + NCHAR(10) +
        'CREATE UNIQUE CLUSTERED INDEX ' + a.Index_Name + ' ON ' + 
-       QUOTENAME(a.Schema_Name) + N'.' + QUOTENAME(a.Table_Name) + '(' + CONVERT(VARCHAR(MAX), a.Indexed_Columns) + ')' 
+       QUOTENAME(a.Schema_Name) + N'.' + QUOTENAME(a.Table_Name) + '(' + CONVERT(VARCHAR(MAX), a.indexed_columns) + ')' 
        + NCHAR(13) + NCHAR(10) +
        'WITH(DROP_EXISTING=ON)'
        + NCHAR(13) + NCHAR(10) +
@@ -86,7 +86,7 @@ CROSS APPLY (SELECT CASE b.[user_lookups]
                       ELSE CONVERT(VARCHAR, CAST(((a.[user_seeks] - c.[user_seeks_all_other_nonclustered]) / (ISNULL(b.[user_lookups], 1) * 1.00)) * 100.0 AS DECIMAL(18, 2)))  + '%' 
                     END AS Ratio_Of_NonClusteredSeeks_VS_HeapLookups) AS Tab1
 WHERE a.is_primary_key = 1
-AND a.Index_type = 'NONCLUSTERED'
+AND a.Index_Type = 'NONCLUSTERED'
 AND a.Number_Rows >= 1000
 
 SELECT * FROM tempdb.dbo.tmpIndexCheck41

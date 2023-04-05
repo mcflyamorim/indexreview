@@ -48,7 +48,7 @@ where d1.state_desc = 'ONLINE' and is_read_only = 0
 and d1.database_id in (SELECT DISTINCT Database_ID FROM tempdb.dbo.Tab_GetIndexInfo)
 
 DECLARE @SQL VarChar(MAX)
-declare @database_name sysname
+declare @Database_Name sysname
 DECLARE @ErrMsg VarChar(8000)
 
 DECLARE c_databases CURSOR read_only FOR
@@ -56,14 +56,14 @@ DECLARE c_databases CURSOR read_only FOR
 OPEN c_databases
 
 FETCH NEXT FROM c_databases
-into @database_name
+into @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @ErrMsg = 'Checking hard-coded indexes on DB - [' + @database_name + ']'
+  SET @ErrMsg = 'Checking hard-coded indexes on DB - [' + @Database_Name + ']'
   --RAISERROR (@ErrMsg, 10, 1) WITH NOWAIT
 
 
-  SET @SQL = 'use [' + @database_name + ']; 
+  SET @SQL = 'use [' + @Database_Name + ']; 
               IF OBJECT_ID(''tempdb.dbo.#tmpsql_modules'') IS NOT NULL
                 DROP TABLE #tmpsql_modules
 
@@ -78,7 +78,7 @@ BEGIN
               AS
               (
                 SELECT DISTINCT Table_Name, Index_Name FROM tempdb.dbo.Tab_GetIndexInfo
-                WHERE database_id = DB_ID()
+                WHERE Database_ID = DB_ID()
               )
               SELECT QUOTENAME(DB_NAME()) AS DatabaseName, 
                      QUOTENAME(ss.name) AS [SchemaName], 
@@ -105,7 +105,7 @@ BEGIN
   EXEC (@SQL)
   
   FETCH NEXT FROM c_databases
-  into @database_name
+  into @Database_Name
 END
 CLOSE c_databases
 DEALLOCATE c_databases

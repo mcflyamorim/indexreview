@@ -62,18 +62,6 @@ With all love and care,
 Fabiano Amorim
 
 */
-/*
------------------------------------------------------
------------------------------------------------------
------------------------------------------------------
------------------------------------------------------
-TODO - Note to Fabiano.
-Change sys.dm_db_index_physical_stats to use sampled for indexes < than 10GB
------------------------------------------------------
------------------------------------------------------
------------------------------------------------------
------------------------------------------------------
-*/
 
 AS
 BEGIN
@@ -83,6 +71,26 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000; /*1 second*/
 
 DECLARE @statusMsg  VARCHAR(MAX) = ''
+
+/* If data already exists, skip the population, unless refresh was asked via @refreshdata */
+IF OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo') IS NOT NULL
+BEGIN
+  /* 
+     I'm assuming data for all tables exists, but I'm only checking tmp_stats... 
+     if you're not sure if this is ok, use @refreshdata = 1 to force the refresh and 
+     table population
+  */
+  IF EXISTS(SELECT 1 FROM tempdb.dbo.Tab_GetIndexInfo) AND (@refreshdata = 0)
+  BEGIN
+			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Table with list of indexes already exists, I''ll reuse it and skip the code to populate the table.'
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+    RETURN
+  END
+  ELSE
+  BEGIN
+    DROP TABLE tempdb.dbo.Tab_GetIndexInfo
+  END
+END
 
 /* Clean up tables from a old execution */
 DECLARE @sql_old_table NVARCHAR(MAX)
@@ -114,67 +122,6 @@ END
 CLOSE c_old_exec
 DEALLOCATE c_old_exec
 
-/* If data already exists, skip the population, unless refresh was asked via @refreshdata */
-IF OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo') IS NOT NULL
-BEGIN
-  /* 
-     I'm assuming data for all tables exists, but I'm only checking tmp_stats... 
-     if you're not sure if this is ok, use @refreshdata = 1 to force the refresh and 
-     table population
-  */
-  IF EXISTS(SELECT 1 FROM tempdb.dbo.Tab_GetIndexInfo) AND (@refreshdata = 0)
-  BEGIN
-			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Table with list of indexes already exists, I''ll reuse it and skip the code to populate the table.'
-    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
-    RETURN
-  END
-  ELSE
-  BEGIN
-    DROP TABLE tempdb.dbo.Tab_GetIndexInfo
-  END
-END
-
-SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Collecting cache index info...'
-  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
-
-IF OBJECT_ID('tempdb.dbo.#tmpCacheMissingIndex1') IS NOT NULL
-    DROP TABLE #tmpCacheMissingIndex1;
-
-WITH XMLNAMESPACES
-   (DEFAULT 'http://schemas.microsoft.com/sqlserver/2004/07/showplan')
-
-SELECT 
-       --n.query('.//MissingIndex') AS 'Missing_Index_Cache_Info',
-       --CONVERT(XML, n.value('(@StatementText)[1]', 'VARCHAR(4000)')) AS 'Missing_Index_Cache_SQL',
-       --n.value('(//MissingIndexGroup/@Impact)[1]', 'FLOAT') AS impact,
-       OBJECT_ID(n.value('(//MissingIndex/@Database)[1]', 'VARCHAR(128)') + '.' +
-           n.value('(//MissingIndex/@Schema)[1]', 'VARCHAR(128)') + '.' +
-           n.value('(//MissingIndex/@Table)[1]', 'VARCHAR(128)')) AS OBJECT_ID
-INTO #tmpCacheMissingIndex1
-FROM
-(
-   SELECT query_plan
-   FROM (
-           SELECT DISTINCT plan_handle
-           FROM sys.dm_exec_query_stats WITH(NOLOCK)
-         ) AS qs
-       OUTER APPLY sys.dm_exec_query_plan(qs.plan_handle) tp
-   WHERE tp.query_plan.exist('//MissingIndex')=1
-) AS tab (query_plan)
-CROSS APPLY query_plan.nodes('//StmtSimple') AS q(n)
-WHERE n.exist('QueryPlan/MissingIndexes') = 1;
-
-IF OBJECT_ID('tempdb.dbo.#tmpCacheMissingIndex2') IS NOT NULL
-    DROP TABLE #tmpCacheMissingIndex2;
-
-SELECT OBJECT_ID, 
-       COUNT(*) AS 'Number_of_missing_index_plans_cache'
-  INTO #tmpCacheMissingIndex2
-  FROM #tmpCacheMissingIndex1
-  GROUP BY OBJECT_ID
-
-CREATE CLUSTERED INDEX ix1 ON #tmpCacheMissingIndex2 (OBJECT_ID);
-
 SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Collecting BP usage info...'
 RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
@@ -186,7 +133,7 @@ SELECT database_id,
        CONVERT(DECIMAL(25, 2), (COUNT(*) * 8) / 1024.) AS CacheSizeMB,
        CONVERT(DECIMAL(25, 2), (SUM(CONVERT(NUMERIC(25,2), free_space_in_bytes)) / 1024.) / 1024.) AS FreeSpaceMB
 INTO #tmpBufferDescriptors
-FROM sys.dm_os_buffer_descriptors
+FROM (SELECT TOP 1000 * FROM sys.dm_os_buffer_descriptors) AS t
 GROUP BY database_id, allocation_unit_id;
 
 CREATE CLUSTERED INDEX ix1 ON #tmpBufferDescriptors (database_id, allocation_unit_id);
@@ -232,8 +179,6 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [Buffer_Pool_FreeSpace_MB] [decimal] (18, 2) NOT NULL,
   [DMV_Missing_Index_Identified] [varchar] (1) NOT NULL,
   [Number_of_missing_index_plans_DMV] [int] NULL,
-  [Cache_Missing_Index_Identified] [varchar] (1) NOT NULL,
-  [Number_of_missing_index_plans_cache] [int] NULL,
   [Total Writes] [bigint] NULL,
   [Number_of_Reads] [bigint] NULL,
   [Index_was_never_used] [varchar] (1) NOT NULL,
@@ -327,7 +272,7 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   IF OBJECT_ID('tempdb.dbo.#tmp_db') IS NOT NULL
     DROP TABLE #tmp_db
 
-  CREATE TABLE #tmp_db ([database_name] sysname)
+  CREATE TABLE #tmp_db ([Database_Name] sysname)
 
   /* If this is SQL2012+, check AG status */
   IF (@sqlmajorver >= 11 /*SQL2012*/)
@@ -387,20 +332,20 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   END
 
 DECLARE @SQL VarCHar(MAX)
-declare @database_name sysname
+declare @Database_Name sysname
 
 DECLARE c_databases CURSOR read_only FOR
-    SELECT [database_name] FROM #tmp_db
+    SELECT [Database_Name] FROM #tmp_db
 OPEN c_databases
 
 FETCH NEXT FROM c_databases
-into @database_name
+into @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Working on DB - [' + @database_name + ']'
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Working on DB - [' + @Database_Name + ']'
   RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
 
-  SET @SQL = 'use [' + @database_name + ']; ' + 
+  SET @SQL = 'use [' + @Database_Name + ']; ' + 
 
   'DECLARE @statusMsg  VARCHAR(MAX) = ''''
   
@@ -644,13 +589,6 @@ BEGIN
                  ''Y''
          END AS ''DMV_Missing_Index_Identified'',
          mid.Number_of_missing_index_plans_DMV,
-         CASE
-             WHEN #tmpCacheMissingIndex2.Number_of_missing_index_plans_cache IS NULL THEN
-                 ''N''
-             ELSE
-                 ''Y''
-         END AS ''Cache_Missing_Index_Identified'',
-         #tmpCacheMissingIndex2.Number_of_missing_index_plans_cache,
          ius.user_updates AS [Total Writes], 
          ius.user_seeks + ius.user_scans + ius.user_lookups AS ''Number_of_Reads'',
          CASE
@@ -824,8 +762,6 @@ BEGIN
       INNER JOIN #tmp_sys_allocation_units AS au
           ON au.container_id = p.hobt_id
          AND au.type_desc = ''IN_ROW_DATA''
-      LEFT OUTER JOIN #tmpCacheMissingIndex2
-        ON #tmpCacheMissingIndex2.OBJECT_ID = i.object_id
       OUTER APPLY (SELECT TOP 1 
                           1 AS TableHasLOB
                   FROM sys.tables
@@ -914,7 +850,7 @@ BEGIN
   EXEC (@SQL)
   
   FETCH NEXT FROM c_databases
-  into @database_name
+  into @Database_Name
 END
 CLOSE c_databases
 DEALLOCATE c_databases

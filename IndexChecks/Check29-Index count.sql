@@ -37,7 +37,7 @@ SELECT TOP 1000
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.Number_Rows AS current_number_of_rows_table,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,

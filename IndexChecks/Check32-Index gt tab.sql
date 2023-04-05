@@ -36,7 +36,7 @@ SELECT TOP 1000
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.Number_Rows AS current_number_of_rows_table,
        CONVERT(NUMERIC(25, 2), a.ReservedSizeInMB / 1024.) AS [Table Size GB],
        CONVERT(NUMERIC(25, 2), ISNULL(t.[Total Index Size],0) / 1024.) AS [Total Index Size GB],
@@ -48,7 +48,7 @@ SELECT TOP 1000
   FROM tempdb.dbo.Tab_GetIndexInfo a
   OUTER APPLY (SELECT SUM(ReservedSizeInMB) FROM tempdb.dbo.Tab_GetIndexInfo b 
                 WHERE a.Database_Name = b.Database_Name
-                  AND a.object_id = b.object_id
+                  AND a.Object_ID = b.Object_ID
                   AND b.Index_Type NOT IN ('HEAP', 'CLUSTERED', 'CLUSTERED COLUMNSTORE')) AS t ([Total Index Size])
  WHERE a.Index_Type IN ('HEAP', 'CLUSTERED', 'CLUSTERED COLUMNSTORE')
 ORDER BY a.ReservedSizeInMB DESC, 

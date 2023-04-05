@@ -37,7 +37,7 @@ SELECT TOP 1000
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.Number_Rows AS current_number_of_rows_table,
        a.ReservedSizeInMB AS [Table Size],
        a.row_lock_wait_count,

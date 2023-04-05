@@ -179,7 +179,7 @@ IF NOT EXISTS
     CREATE TABLE #tblWorking
     (
         database_id INT,
-        [database_name] NVARCHAR(255),
+        [Database_Name] NVARCHAR(255),
         [object_id] INT,
         [object_name] NVARCHAR(255),
         index_id INT,
@@ -219,7 +219,7 @@ IF NOT EXISTS
 
 SET @sqlcmd
     = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                 WHERE name in (select Database_name FROM tempdb.dbo.Tab_GetIndexInfo)';
+                 WHERE name in (select Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)';
 INSERT INTO #tmpdbs0
 (
     [dbid],
@@ -522,11 +522,11 @@ BEGIN
     ) > 0
     BEGIN
         SELECT 'Check 5 - Xtp RangeIX Health' AS [Info],
-               DB_NAME([database_id]) AS [database_name],
+               DB_NAME([database_id]) AS [Database_Name],
                [schema_name],
                [table_name],
                [index_name],
-               [type_desc] AS index_type,
+               [type_desc] AS Index_Type,
                delta_pages,
                internal_pages,
                leaf_pages,
@@ -640,7 +640,7 @@ BEGIN
                                                                   END
                           ) * 100
                       ) > 5
-        ORDER BY [database_name],
+        ORDER BY [Database_Name],
                  [schema_name],
                  table_name,
                  [leaf_pages] DESC;

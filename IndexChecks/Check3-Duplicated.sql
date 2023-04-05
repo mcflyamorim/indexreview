@@ -40,7 +40,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
        a.Table_Name,
        a.Index_Name,
        a.Index_Type,
-       a.Indexed_Columns,
+       a.indexed_columns,
        a.included_columns,
        a.filter_definition,
        a.Number_Rows AS current_number_of_rows_table,
@@ -52,7 +52,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
                WHERE a.Database_ID = b.Database_ID 
                  AND a.Object_ID = b.Object_ID
                  AND a.Index_ID <> b.Index_ID
-                 AND CONVERT(VARCHAR(MAX), a.Indexed_Columns) = CONVERT(VARCHAR(MAX), b.Indexed_Columns)
+                 AND CONVERT(VARCHAR(MAX), a.indexed_columns) = CONVERT(VARCHAR(MAX), b.indexed_columns)
                  AND CONVERT(VARCHAR(MAX), a.included_columns) = CONVERT(VARCHAR(MAX), b.included_columns)
                  AND ISNULL(a.filter_definition,'') = ISNULL(b.filter_definition,'')
               FOR XML PATH('')), 1, 2, ''))) AS Exact_Duplicated,
@@ -61,7 +61,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
                WHERE a.Database_ID = b.Database_ID 
                  AND a.Object_ID = b.Object_ID
                  AND a.Index_ID <> b.Index_ID
-                 AND CONVERT(VARCHAR(MAX), b.Indexed_Columns) LIKE CONVERT(VARCHAR(MAX), a.Indexed_Columns) + '%'
+                 AND CONVERT(VARCHAR(MAX), b.indexed_columns) LIKE CONVERT(VARCHAR(MAX), a.indexed_columns) + '%'
                  AND ISNULL(a.filter_definition,'') = ISNULL(b.filter_definition,'')
                 FOR XML PATH('')), 1, 2, '')) AS Overlapped_Index,
        DropCmd = 
@@ -85,6 +85,6 @@ ORDER BY current_number_of_rows_table DESC,
          Database_Name,
          Schema_Name,
          Table_Name,
-         CONVERT(VARCHAR(MAX), Indexed_Columns),
+         CONVERT(VARCHAR(MAX), indexed_columns),
          ReservedSizeInMB DESC,
          Index_Name

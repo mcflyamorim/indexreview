@@ -41,14 +41,14 @@ SELECT 'Check4 – Index fill-factor' AS [Info],
         a.Table_Name,
         a.Index_Name,
         a.Index_Type,
-        a.Indexed_Columns,
+        a.indexed_columns,
         a.Number_Rows AS current_number_of_rows_table,
         a.ReservedSizeInMB,
         user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
         a.last_datetime_obj_was_used,
-        a.Fill_factor,
+        a.fill_factor,
         CASE
-            WHEN a.Fill_factor BETWEEN 1 AND 79 THEN
+            WHEN a.fill_factor BETWEEN 1 AND 79 THEN
                 'Index with fill factor lower than 80 percent. Revise the need to maintain such a low value'
             ELSE
                 'OK'

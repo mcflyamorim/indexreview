@@ -52,21 +52,21 @@ SELECT 'Check 14 - Non-unique clustered indexes' AS [Info],
         a.Table_Name,
         a.Index_Name,
         a.Index_Type,
-        a.Indexed_Columns,
+        a.indexed_columns,
         a.Number_Rows AS current_number_of_rows_table,
         a.ReservedSizeInMB,
         user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
         a.last_datetime_obj_was_used,
         a.[is_unique],
         CASE
-            WHEN [is_unique] = 0 AND index_ID = 1 THEN
+            WHEN [is_unique] = 0 AND Index_ID = 1 THEN
                 '[WARNING: Clustered index is non-unique. Revise the need to have non-unique clustering keys to which a uniquefier is added]'
             ELSE
                 'OK'
         END AS [Comment]
    INTO tempdb.dbo.tmpIndexCheck14
    FROM tempdb.dbo.Tab_GetIndexInfo AS a
-  WHERE [is_unique] = 0 AND index_ID = 1
+  WHERE [is_unique] = 0 AND Index_ID = 1
 
 SELECT * FROM tempdb.dbo.tmpIndexCheck14
  ORDER BY current_number_of_rows_table DESC, 
