@@ -187,7 +187,6 @@ SELECT database_id,
        CONVERT(DECIMAL(25, 2), (SUM(CONVERT(NUMERIC(25,2), free_space_in_bytes)) / 1024.) / 1024.) AS FreeSpaceMB
 INTO #tmpBufferDescriptors
 FROM sys.dm_os_buffer_descriptors
-WHERE dm_os_buffer_descriptors.page_type IN ( 'data_page', 'index_page' )
 GROUP BY database_id, allocation_unit_id;
 
 CREATE CLUSTERED INDEX ix1 ON #tmpBufferDescriptors (database_id, allocation_unit_id);
