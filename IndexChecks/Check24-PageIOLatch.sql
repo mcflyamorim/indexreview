@@ -48,7 +48,7 @@ SELECT TOP 1000
        a.page_io_latch_wait_count,
        a.page_io_latch_wait_in_ms AS total_page_io_latch_wait_in_ms,
        CAST(1. * a.page_io_latch_wait_in_ms / NULLIF(a.page_io_latch_wait_count ,0) AS DECIMAL(12,2)) AS page_io_latch_avg_wait_ms,
-       CONVERT(VARCHAR(10), ((page_io_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_io_latch_wait_in_ms) / 1000), 0), 108) AS total_page_io_latch_wait_d_h_m_s
+       CONVERT(VARCHAR(200), ((page_io_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_io_latch_wait_in_ms) / 1000), 0), 108) AS total_page_io_latch_wait_d_h_m_s
   INTO tempdb.dbo.tmpIndexCheck24
   FROM tempdb.dbo.Tab_GetIndexInfo a
  WHERE a.page_io_latch_wait_count > 0
