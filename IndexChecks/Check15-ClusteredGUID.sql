@@ -1,5 +1,5 @@
 /* 
-Check15 – GUID as index key
+Check15 - GUID as index key
 
 Description:
 A big reason for a clustered index is to retrieve rows for a range of values for a given column. Because the data is physically arranged in that order, the rows can be extracted very efficiently. Something like a GUID, while excellent for a primary key, could be positively detrimental to performance, as there will be additional cost for inserts and no perceptible benefit on selects.

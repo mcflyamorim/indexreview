@@ -1,5 +1,5 @@
 /* 
-Check4 – Index fill-factor
+Check4 - Index fill-factor
 
 Description:
 The fill-factor option is provided for fine-tuning index data storage and performance. When an index is created or rebuilt, the fill-factor value determines the percentage of space on each leaf-level page to be filled with data, reserving the remainder on each page as free space for future growth. For example, specifying a fill-factor value of 80 means that 20 percent of each leaf-level page will be left empty, providing space for index expansion as data is added to the underlying table. The empty space is reserved between the index rows rather than at the end of the index.
@@ -35,7 +35,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck4') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck4
 
-SELECT 'Check4 – Index fill-factor' AS [Info],
+SELECT 'Check4 - Index fill-factor' AS [Info],
         a.Database_Name,
         a.Schema_Name,
         a.Table_Name,
@@ -46,6 +46,7 @@ SELECT 'Check4 – Index fill-factor' AS [Info],
         a.ReservedSizeInMB,
         user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
         a.last_datetime_obj_was_used,
+        a.plan_cache_reference_count,
         a.fill_factor,
         CASE
             WHEN a.fill_factor BETWEEN 1 AND 79 THEN

@@ -1,23 +1,21 @@
 /*
-Check 42 - Report min value for DateTime/Date columns
+Check 43 - Report detailed index usage based on last 60 minutes
 
 Description:
-Reporting min and max values for date columns for tables greater than 1mi rows.
-This is useful to identify tables storing old data and are good candidates to purged/archive/remove, or maybe apply partitioning.
+Collecting index usage detailed info for the past 1 hour and reporting detailed information.
+This is useful to identify table access patterns and detailed index usage.
 
 Estimated Benefit:
-Very High
+Medium
 
 Estimated Effort:
-High
+NA
 
 Recommendation:
 Quick recommendation:
-Consider to implement a purge/archive strategy or implement partitioning on large tables.
+Review index usage
 
 Detailed recommendation:
-Review reported tables and implement a purge/archive strategy.
-Review reported tables and consider to implement SQL Server native partitioning or partitioned views.
 */
 
 
@@ -27,8 +25,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck42') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck42
+IF OBJECT_ID('tempdb.dbo.tmpIndexCheck43') IS NOT NULL
+  DROP TABLE tempdb.dbo.tmpIndexCheck43
 
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
@@ -81,7 +79,7 @@ END
 CLOSE c_index1
 DEALLOCATE c_index1
 
-SELECT 'Check 42 - Report min value for DateTime/Date columns' AS [Info],
+SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Info],
        Database_Name,
        Schema_Name,
        Table_Name,
@@ -89,21 +87,20 @@ SELECT 'Check 42 - Report min value for DateTime/Date columns' AS [Info],
        Index_Type,
        indexed_columns,
        Number_Rows AS current_number_of_rows_table,
-       plan_cache_reference_count,
-       #tmp1.cMin AS cMin_datetime,
-       #tmp1.cMax AS cMax_datetime,
+       #tmp1.cMin,
+       #tmp1.cMax,
        DATEDIFF(YEAR, cMin, cMax) AS YearsCnt,
        key_column_name, 
        key_column_data_type,
        'SELECT MIN(' + QUOTENAME(key_column_name) + ') AS cMin, MAX(' + QUOTENAME(key_column_name) + ') AS cMax FROM ' + QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' WITH(NOLOCK) OPTION (MAXDOP 1);' AS Cmd       
-INTO tempdb.dbo.tmpIndexCheck42
+INTO tempdb.dbo.tmpIndexCheck43
 FROM #tmp1
 INNER JOIN tempdb.dbo.Tab_GetIndexInfo
 ON Tab_GetIndexInfo.Database_ID = #tmp1.Database_ID
 AND Tab_GetIndexInfo.Object_ID = #tmp1.Object_ID
 AND Tab_GetIndexInfo.Index_ID = #tmp1.Index_ID
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck42
+SELECT * FROM tempdb.dbo.tmpIndexCheck43
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,

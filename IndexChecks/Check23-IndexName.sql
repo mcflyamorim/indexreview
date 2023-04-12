@@ -1,5 +1,5 @@
 /* 
-Check23 – Index naming convention
+Check23 - Index naming convention
 
 Description:
 There are different schools of thought on how to name indexes and there is not a single best practice that works for everyone, but it is important to whatever you do, be consistent and avoid to use “test”, “_DTA_”, “missing index” on index name to avoid confusion. The purpose of having a good naming convention is to increase code readability.
@@ -28,7 +28,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck23') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck23
 
-SELECT 'Check23 – Index naming convention' AS [Info],
+SELECT 'Check23 - Index naming convention' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,
@@ -39,6 +39,7 @@ SELECT 'Check23 – Index naming convention' AS [Info],
        a.ReservedSizeInMB,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        tab3.avg_of_access_per_minute_based_on_index_usage_dmv,
        Tab1.[Reads_Ratio],
 	      Tab2.[Writes_Ratio],

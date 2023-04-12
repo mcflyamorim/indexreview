@@ -1,5 +1,5 @@
 /* 
-Check10 – Unused or rarely used indexes
+Check10 - Unused or rarely used indexes
 
 Description:
 While proper indexes can greatly improve the performance, they can also negatively impact UPDATE, DELETE and INSERT operations. They also have a resource cost to maintain and can increase disk space consumption. Unused indexes have all these costs without providing any benefit. 

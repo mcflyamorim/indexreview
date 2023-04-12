@@ -1,5 +1,5 @@
 /* 
-Check9 – Hard coded indexes
+Check9 - Hard coded indexes
 
 Description:
 Some sql modules have fixed hard coded references to indexes. Because the SQL Server query optimizer typically selects the best execution plan for a query, we recommend that hints be used only as a last resort by experienced developers and database administrators. Also, if the referenced index is removed, the module will start to fail.

@@ -1,5 +1,5 @@
 /* 
-Check32 – Index with size greater than table
+Check32 - Index with size greater than table
 
 Description:
 Reports all tables that space to store indexes are greater than the base table size.
@@ -30,7 +30,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck32') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck32
  
 SELECT TOP 1000
-       'Check32 – Index with size greater than table' AS [Info],
+       'Check32 - Index with size greater than table' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

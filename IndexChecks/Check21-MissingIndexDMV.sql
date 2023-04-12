@@ -1,5 +1,5 @@
 /* 
-Check21 – Missing index DMV
+Check21 - Missing index DMV
 
 Description:
 Potentially missing indexes were found based on missing index SQL Server DMVs. It is important to revise them.
@@ -262,7 +262,7 @@ WHERE I.[Score] >= 100
 GROUP BY I.DBName, I.[Table], I.[Ix_Name], I.[ix_handle], I.[KeyCols], I.[IncludedCols], I2.[Ix_Name]
 ORDER BY I.DBName, I.[Table], I.[Ix_Name]
 
-SELECT 'Check21 – Missing index DMV' AS [Info],
+SELECT 'Check21 - Missing index DMV' AS [Info],
        IC.DBName AS [Database_Name],
        IC.[Table] AS [Table_Name],
        CONVERT(BIGINT, [Score]) AS [Score],

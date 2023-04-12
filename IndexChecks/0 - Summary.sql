@@ -51,7 +51,7 @@ AS (
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Total number of tables: ') AS [info],
-          '- ' + CONVERT(VARCHAR(200),COUNT(DISTINCT Object_ID)) + ' -' AS [result],
+          '- ' + CONVERT(VARCHAR(200),COUNT(DISTINCT Database_Name + Schema_Name + Table_Name)) + ' -' AS [result],
           'NA' AS prioritycol,
           'NA' AS more_info,
           'NA' AS quick_fix
@@ -225,7 +225,7 @@ AS (
           'Check4' AS more_info,
           'NA' AS quick_fix
    FROM tempdb.dbo.tmpIndexCheck4
-  WHERE Fill_factor <= 80
+  WHERE fill_factor <= 80
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of modules with hard-coded indexes: ' ) AS [info],
@@ -325,8 +325,7 @@ AS (
           'High' AS prioritycol,
           'Check23' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck20
-   WHERE [DatabaseName] IS NOT NULL
+   FROM tempdb.dbo.tmpIndexCheck23
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of clustered indexes with singleton lookup ratio >= 90%: ') AS [info],

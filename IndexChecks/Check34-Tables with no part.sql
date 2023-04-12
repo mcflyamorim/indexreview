@@ -1,5 +1,5 @@
 /* 
-Check34 – Tables greater than 10mi and not partitioned
+Check34 - Tables greater than 10mi and not partitioned
 
 Description:
 Reports all indexes greater than 10 million rows and are not using partitioning.
@@ -30,7 +30,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck34') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck34
 
-SELECT 'Check34 – Tables greater than 10mi and not partitioned' AS [Info],
+SELECT 'Check34 - Tables greater than 10mi and not partitioned' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

@@ -1,5 +1,5 @@
 /* 
-Check1 – Page density
+Check1 - Page density
 
 Description:
 Low page density (also known as page fullness) can impact on query performance and resource consumption.
@@ -46,6 +46,7 @@ SELECT 'Check 1 - Check indexes with small number of rows per page' AS [Info],
        a.data_compression_desc,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        a.ReservedSizeInMB,
        a.Buffer_Pool_SpaceUsed_MB,
        a.Buffer_Pool_FreeSpace_MB,

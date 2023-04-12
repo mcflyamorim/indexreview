@@ -1,5 +1,5 @@
 /* 
-Check26 – Lock escalation
+Check26 - Lock escalation
 
 Description:
 Lock escalation is the process of converting many fine-grained locks (such as row or page locks) to table locks. SQL Server dynamically determines when to do lock escalation. When it makes this decision, SQL Server considers the number of locks that are held on a particular scan, the number of locks that are held by the whole transaction, and the memory that's used for locks in the system as a whole.
@@ -33,7 +33,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck26') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck26
 
 SELECT TOP 1000
-       'Check26 – Lock escalation' AS [Info],
+       'Check26 - Lock escalation' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

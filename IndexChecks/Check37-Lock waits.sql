@@ -1,5 +1,5 @@
 /* 
-Check37 – Indexes and lock wait time
+Check37 - Indexes and lock wait time
 
 Description:
 Queries using indexes with high wait on lock operations can experience degraded concurrency and performance.
@@ -31,7 +31,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck37') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck37
 
 SELECT TOP 1000
-       'Check37 – Indexes and lock wait time' AS [Info],
+       'Check37 - Indexes and lock wait time' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

@@ -1,5 +1,5 @@
 /* 
-Check20 – Table index not aligned with PS
+Check20 - Table index not aligned with PS
 
 Description:
 A non-aligned index is partitioned differently from its corresponding table. That is, the index has a different partition scheme that places it on a separate filegroup or set of filegroups from the base table.
@@ -273,7 +273,7 @@ IF
 ) > 0
 BEGIN
     INSERT INTO tempdb.dbo.tmpIndexCheck20
-    SELECT 'Check20 – Table index not aligned with PS' AS [Info],
+    SELECT 'Check20 - Table index not aligned with PS' AS [Info],
            [DatabaseName] AS [Database_Name],
            schemaName AS [Schema_Name],
            [objectName] AS [Table_Name],
@@ -285,7 +285,7 @@ END;
 ELSE
 BEGIN
     INSERT INTO tempdb.dbo.tmpIndexCheck20([Info], [Comment])
-    SELECT 'Check20 – Table index not aligned with PS' AS [Info],
+    SELECT 'Check20 - Table index not aligned with PS' AS [Info],
            'OK' AS [Comment]
 END;
 

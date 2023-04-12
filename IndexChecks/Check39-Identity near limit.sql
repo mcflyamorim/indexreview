@@ -1,5 +1,5 @@
 /* 
-Check39 – Identity columns
+Check39 - Identity columns
 
 Description:
 Tests that identity columns values are not getting close to the maximum value for the column data type.
@@ -106,7 +106,7 @@ CLOSE c_databases;
 DEALLOCATE c_databases;
 
 /* Retrieve our results and format it all prettily */
-SELECT 'Check39 – Identity columns' AS [Info],
+SELECT 'Check39 - Identity columns' AS [Info],
        database_name,
        table_name,
        column_name,

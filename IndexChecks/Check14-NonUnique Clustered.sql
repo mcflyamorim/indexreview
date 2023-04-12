@@ -1,5 +1,5 @@
 /* 
-Check14 – Non-unique clustered index
+Check14 - Non-unique clustered index
 
 Description:
 Index uniqueness is highly desirable attribute of a clustering key, and goes hand-in-hand with index narrowness. SQL Server does not require a clustered index to be unique, but yet it must have some means of uniquely identifying every row. For non-unique clustered indexes, SQL Server adds to every duplicate instance of a clustering key value a 4-byte integer value called a uniqueifier. This uniqueifier is added everywhere the clustering key is stored. That means the uniqueifier is stored in both clustered and non-clustered indexes. 

@@ -1,5 +1,5 @@
 /* 
-Check38 – More index than Cols
+Check38 - More index than Cols
 
 Description:
 Poorly designed indexes and a lack of indexes are primary sources of database application bottlenecks. Designing efficient indexes is paramount to achieving good database and application performance.
@@ -278,7 +278,7 @@ IF
 ) > 0
 BEGIN
     INSERT INTO tempdb.dbo.tmpIndexCheck38
-    SELECT 'Check38 – More index than Cols' AS [Info],
+    SELECT 'Check38 - More index than Cols' AS [Info],
            [DatabaseName] AS [Database_Name],
            schemaName AS [Schema_Name],
            [objectName] AS [Table_Name],
@@ -291,7 +291,7 @@ END;
 ELSE
 BEGIN
     INSERT INTO tempdb.dbo.tmpIndexCheck38 ([Info], [Comment])
-    SELECT 'Check38 – More index than Cols' AS [Info],
+    SELECT 'Check38 - More index than Cols' AS [Info],
            'OK' AS [Comment]
 END;
 

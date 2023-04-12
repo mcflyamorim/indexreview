@@ -1,5 +1,5 @@
 /* 
-Check36 – Indexes in a key column set to ascending
+Check36 - Indexes in a key column set to ascending
 
 Description:
 Review reported indexes and make sure the frequency you update the index statistics is enough to provide accurate information. Statistics on ascending or descending key columns, such as IDENTITY or real-time timestamp columns, might require more frequent statistics updates than the Query Optimizer performs. 
@@ -40,7 +40,7 @@ IF OBJECT_ID('tempdb.dbo.#TMP1') IS NOT NULL
   DROP TABLE #TMP1
 
 SELECT TOP 1000
-       'Check36 – Indexes in a key column set to ascending' AS [Info],
+       'Check36 - Indexes in a key column set to ascending' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

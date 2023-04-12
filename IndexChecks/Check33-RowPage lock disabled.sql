@@ -1,5 +1,5 @@
 /* 
-Check33 – Row/Page lock disabled
+Check33 - Row/Page lock disabled
 
 Description:
 Reports indexes that have options ALLOW_ROW_LOCKS or ALLOW_PAGE_LOCKS set to OFF (default is ON).
@@ -29,7 +29,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck33') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck33
 
-SELECT 'Check33 – Row/Page lock disabled' AS [Info],
+SELECT 'Check33 - Row/Page lock disabled' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

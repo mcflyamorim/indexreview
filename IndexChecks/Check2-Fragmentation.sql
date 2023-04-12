@@ -1,5 +1,5 @@
 /* 
-Check2 – Fragmentation
+Check2 - Fragmentation
 
 Description:
 In B-tree (rowstore) indexes, fragmentation exists when indexes have pages in which the logical ordering within the index, based on the key values of the index, does not match the physical ordering of index pages.
@@ -54,6 +54,7 @@ SELECT 'Check 2 - Index fragmentation' AS [Info],
         a.data_compression_desc,
         user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
         a.last_datetime_obj_was_used,
+        a.plan_cache_reference_count,
         a.ReservedSizeInMB,
         a.Buffer_Pool_SpaceUsed_MB,
         a.Buffer_Pool_FreeSpace_MB,

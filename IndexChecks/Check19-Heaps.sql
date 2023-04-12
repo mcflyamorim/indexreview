@@ -1,5 +1,5 @@
 /* 
-Check19 – Heaps
+Check19 - Heaps
 
 Description:
 Poorly designed indexes and a lack of indexes are primary sources of database application bottlenecks. Designing efficient indexes is paramount to achieving good database and application performance.
@@ -35,7 +35,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck19') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck19
  
-SELECT 'Check19 – Heaps' AS [Info],
+SELECT 'Check19 - Heaps' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,
@@ -43,6 +43,7 @@ SELECT 'Check19 – Heaps' AS [Info],
        a.Index_Type,
        a.Number_Rows AS current_number_of_rows_table,
        a.ReservedSizeInMB AS [Table Size],
+       a.plan_cache_reference_count,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
        a.user_scans,

@@ -1,5 +1,5 @@
 /* 
-Check31 – Most accessed indexes and number of singleton lookups and range scans
+Check31 - Most accessed indexes and number of singleton lookups and range scans
 
 Description:
 Reports the TOP most accessed indexes and number of singleton lookups and range scans. If most of reads are singleton lookups, it may be a good idea to re-create the index as a nonclustered and use cluster in a column that requires range scans.
@@ -31,7 +31,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck31') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck31
 
 SELECT TOP 1000
-       'Check31 – Most accessed indexes and number of singleton lookups and range scans' AS [Info],
+       'Check31 - Most accessed indexes and number of singleton lookups and range scans' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

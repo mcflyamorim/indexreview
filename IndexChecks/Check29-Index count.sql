@@ -1,5 +1,5 @@
 /* 
-Check29 – Tables with more indexes
+Check29 - Tables with more indexes
 
 Description:
 Reports the TOP tables and number of indexes. Large numbers of indexes on a table affect the performance of INSERT, UPDATE, DELETE, and MERGE statements because all indexes must be adjusted appropriately as data in the table changes.
@@ -31,7 +31,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck29') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck29
 
 SELECT TOP 1000
-       'Check29 – Tables with more indexes' AS [Info],
+       'Check29 - Tables with more indexes' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,

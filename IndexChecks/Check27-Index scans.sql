@@ -2,7 +2,7 @@
 Check27 - Index scans
 
 Description:
-Reports the TOP indexes and number of scans by user queries that did not use 'seek' predicate. Normally the index seek is faster than index scan since a scan reads all the rows in an index – B-tree in the index order whereas index seek traverses a B-tree and walks through leaf nodes seeking only the matching or qualifying rows based on the filter criteria.
+Reports the TOP indexes and number of scans by user queries that did not use 'seek' predicate. Normally the index seek is faster than index scan since a scan reads all the rows in an index - B-tree in the index order whereas index seek traverses a B-tree and walks through leaf nodes seeking only the matching or qualifying rows based on the filter criteria.
 
 Estimated Benefit:
 Medium
@@ -44,6 +44,7 @@ SELECT TOP 1000
        a.ReservedSizeInMB,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        a.Buffer_Pool_SpaceUsed_MB,
        a.avg_fragmentation_in_percent,
        a.user_scans,

@@ -1,5 +1,5 @@
 /* 
-Check3 – Duplicated or overlapped indexes
+Check3 - Duplicated or overlapped indexes
 
 Description:
 Duplicate indexes are indexes with a key identical or overlapped by another index. Like unused indexes, duplicates cost extra resources without providing a benefit.
@@ -47,6 +47,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
        a.ReservedSizeInMB,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        CONVERT(XML, (STUFF((SELECT ', ' + QUOTENAME(b.Index_Name)
                 FROM tempdb.dbo.Tab_GetIndexInfo AS b 
                WHERE a.Database_ID = b.Database_ID 

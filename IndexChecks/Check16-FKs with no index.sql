@@ -1,5 +1,5 @@
 /* 
-Check16 – Foreign keys without index
+Check16 - Foreign keys without index
 
 Description:
 Foreign key constraints should have corresponding indexes. 

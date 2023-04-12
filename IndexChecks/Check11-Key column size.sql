@@ -1,5 +1,5 @@
 /* 
-Check11 – Key column size
+Check11 - Key column size
 
 Description:
 The maximum number of bytes in a clustered index key can't exceed 900. For a nonclustered index key, the maximum is 1,700 bytes.

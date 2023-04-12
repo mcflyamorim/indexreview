@@ -18,10 +18,10 @@
     https://github.com/mcflyamorim
     .EXAMPLE
     Open a PowerShell console and run the following command:
-    PS C:\>& "C:\temp\ExportIndexChecksToExcel.ps1" -SQLInstance "SQL2019" -LogFilePath "C:\temp\" -Force_sp_GetIndexInfo_Execution
+    PS C:\>& "C:\temp\ExportIndexChecksToExcel.ps1" -SQLInstance "SQL2019" -LogFilePath "C:\temp\" -Force_sp_GetIndexInfo_Execution -CreateTranscriptLog
     .EXAMPLE
     Open a PowerShell console and run the following command:
-    PS C:\>& "C:\temp\ExportIndexChecksToExcel.ps1" -SQLInstance "DELLFABIANO\SQL2019" -UserName "sa" -Password "@bc12345" -LogFilePath "C:\temp\" -Force_sp_GetIndexInfo_Execution
+    PS C:\>& "C:\temp\ExportIndexChecksToExcel.ps1" -SQLInstance "DELLFABIANO\SQL2019" -UserName "sa" -Password "@bc12345" -LogFilePath "C:\temp\" -Force_sp_GetIndexInfo_Execution -CreateTranscriptLog
 #>
 param
 (
@@ -546,6 +546,18 @@ try
 				$Range = $c2 + ':' + $c3 | Out-String
 				Add-ConditionalFormatting -WorkSheet $ws -Address $Range -DataBarColor Red
 			}
+			elseif ($ColValue -like '*Buffer_Pool_SpaceUsed_MB*') {
+				$c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
+				$c3 = $c1 + ($ResultRowCount + [int]($NumberOfRowsDescription + 3))
+				$Range = $c2 + ':' + $c3 | Out-String
+				Add-ConditionalFormatting -WorkSheet $ws -Address $Range -DataBarColor Red
+			}
+			elseif ($ColValue -like '*ReservedSizeInMB*') {
+				$c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
+				$c3 = $c1 + ($ResultRowCount + [int]($NumberOfRowsDescription + 3))
+				$Range = $c2 + ':' + $c3 | Out-String
+				Add-ConditionalFormatting -WorkSheet $ws -Address $Range -DataBarColor Red
+			}
 			elseif ($ColValue -like '*percent_of*') {
 				$c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
 				$c3 = $c1 + ($ResultRowCount + [int]($NumberOfRowsDescription + 3))
@@ -565,7 +577,7 @@ try
 				$Range = $c2 + ':' + $c3 | Out-String
 				$ws.Cells["$Range"].Style.Numberformat.Format = (Expand-NumberFormat -NumberFormat 'yyyy/mm/dd hh:mm:ss')
             }
-            elseif (($ColValue -like '*statement_text*') -Or ($ColValue -like '*object_code_definition*') -Or ($ColValue -like '*referenced_columns*')) {
+            elseif (($ColValue -like '*statement_text*') -Or ($ColValue -like '*indexed_columns*') -Or ($ColValue -like '*index_list*') -Or ($ColValue -like '*stats_list*') -Or ($ColValue -like '*object_code_definition*') -Or ($ColValue -like '*referenced_columns*')) {
                 Set-ExcelColumn -Worksheet $ws -Column $i -Width 30
             }
 			elseif ($ColValue -eq $null) {

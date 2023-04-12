@@ -1,5 +1,5 @@
 /* 
-Check25 – Indexes by memory usage
+Check25 - Indexes by memory usage
 
 Description:
 Measures the amount of memory used in the buffer cache by the largest object (based on the number of pages). It checks the sys.dm_os_buffer_descriptors to identify the object, and returns the relative percentage used. This information is important if you want to monitor what is in the buffer area, or if you are having performance-related disk read problems.
@@ -32,7 +32,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck25') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck25
 
 SELECT TOP 1000
-       'Check25 – Indexes by memory usage' AS [Info],
+       'Check25 - Indexes by memory usage' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,
@@ -44,6 +44,7 @@ SELECT TOP 1000
        a.ReservedSizeInMB,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        a.Buffer_Pool_SpaceUsed_MB,
        a.Buffer_Pool_FreeSpace_MB,
        CONVERT(NUMERIC(18, 2), (a.Buffer_Pool_FreeSpace_MB / a.Buffer_Pool_SpaceUsed_MB) * 100) AS Buffer_Pool_FreeSpace_Percent,

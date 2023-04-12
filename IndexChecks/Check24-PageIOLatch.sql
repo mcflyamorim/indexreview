@@ -1,5 +1,5 @@
 /* 
-Check24 – Indexes waiting on physical disk I/O operations
+Check24 - Indexes waiting on physical disk I/O operations
 
 Description:
 SQL Server tracks how much time the Database Engine spend waiting to complete a physical disk I/O request. This information is stored at the index level access and can be used to identify what are the objects that are spending most of the time on disk I/O operations. Long I/O waits may indicate problems with the disk subsystem.
@@ -31,7 +31,7 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck24') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck24
 
 SELECT TOP 1000
-       'Check24 – Indexes waiting on physical disk I/O operations' AS [Info],
+       'Check24 - Indexes waiting on physical disk I/O operations' AS [Info],
        a.Database_Name,
        a.Schema_Name,
        a.Table_Name,
