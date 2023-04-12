@@ -427,15 +427,15 @@ try
 		Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
 
         $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 7200 <#2 hours#> -InputFile $TsqlFile -ErrorAction Stop
+		Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -InputFile $TsqlFile -ErrorAction Stop
 
         #Using -Verbose to capture SQL Server message output
 		if ($Database){
             $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 7200 <#2 hours#> -Query $Query1 -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -Query $Query1 -Verbose -ErrorAction Stop
         }
         else{
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 7200 <#2 hours#> -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
         }
         Write-Msg "Finished to run sp_GetIndexInfo"
 	}
@@ -463,7 +463,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 18000 <#5 hours#> -MaxCharLength 80000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -596,8 +596,8 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 18000 <#5 hours#> -MaxCharLength 80000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 18000 <#5 hours#> -MaxCharLength 80000 `
+        $Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM tempdb.dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"
