@@ -236,7 +236,7 @@ BEGIN
        GROUP BY database_id,
                 object_id, 
                 index_id
-       OPTION (RECOMPILE)
+       OPTION (MAXDOP 1, RECOMPILE)
       '
       INSERT INTO #tmp_dm_db_index_operational_stats
       EXEC sp_executesql @Cmd, N'@dbid INT, @v_captured_datetime DATETIME2(7)', @dbid = @Database_ID, @v_captured_datetime = @captured_datetime

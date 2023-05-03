@@ -28,7 +28,7 @@ sp_GetIndexInfo - March 2023 (v1)
 Fabiano Amorim
 http:\\www.blogfabiano.com | fabianonevesamorim@hotmail.com
 
-For help and more information, visit https://github.com/mcflyamorim/StatisticsReview
+For help and more information, visit https://github.com/mcflyamorim/IndexReview
 
 How to use:
 Collect statistic information for all DBs:
@@ -43,7 +43,7 @@ Brent Ozar sp_blitz scripts, MS Tiger team BP, Glenn Berry's diagnostic queries,
 and probably a lot of other SQL community folks out there, so, a huge kudos for SQL community.
 
 Important notes and pre-requisites:
- * Found a bug or want to change something? Please feel free to create an issue on https://github.com/mcflyamorim/StatisticsReview
+ * Found a bug or want to change something? Please feel free to create an issue on https://github.com/mcflyamorim/IndexReview
    or, you can also e-mail (really? I didn't know people were still using this.) me at fabianonevesamorim@hotmail.com
  * Depending on the number of indexes, the PS script to generate the excel file may use a lot (a few GBs) of memory.
 
@@ -1206,6 +1206,7 @@ BEGIN
       FROM sys.dm_db_index_operational_stats (DB_ID(), NULL, NULL, NULL) AS ios
      GROUP BY object_id, 
            index_id
+     OPTION (MAXDOP 1)
   END TRY
   BEGIN CATCH
     SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error while trying to read data from sys.dm_db_index_operational_stats. You may see limited results because of it.''

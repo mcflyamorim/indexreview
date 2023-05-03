@@ -43,7 +43,7 @@ SELECT TOP 1000
        a.row_lock_wait_count,
        a.row_lock_wait_in_ms AS total_row_lock_wait_in_ms,
        CAST(1. * a.row_lock_wait_in_ms / NULLIF(a.row_lock_wait_count ,0) AS decimal(12,2)) AS avg_row_lock_wait_in_ms,
-       CONVERT(VARCHAR(200), ((row_lock_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((row_lock_wait_in_ms) / 1000), 0), 108) AS total_avg_lock_duration_d_h_m_s,
+       CONVERT(VARCHAR(200), ((row_lock_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((row_lock_wait_in_ms) / 1000), 0), 108) AS total_row_lock_duration_d_h_m_s,
        a.page_lock_count,
        a.page_lock_wait_in_ms AS total_page_lock_wait_in_ms,
        CAST(1. * a.page_lock_wait_in_ms / NULLIF(a.page_lock_count ,0) AS decimal(12,2)) AS avg_page_lock_wait_in_ms,

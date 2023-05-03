@@ -193,9 +193,9 @@ Clear-Host
 $ScriptPath = split-path -parent $MyInvocation.MyCommand.Definition
 if ($CreateTranscriptLog){
     $TranscriptTimestamp = Get-Date -format "yyyyMMdd_HH_mm_ss_fff"
-    Write-Msg -Message "Creating TranscriptLog on $ScriptPath\Log\StatisticCheck_LogOutput_$TranscriptTimestamp.txt" -VerboseMsg
+    Write-Msg -Message "Creating TranscriptLog on $ScriptPath\Log\IndexCheck_LogOutput_$TranscriptTimestamp.txt" -VerboseMsg
     try {Stop-Transcript -ErrorAction SilentlyContinue | Out-Null} catch{}
-    try {Start-Transcript -Path "$ScriptPath\Log\StatisticCheck_LogOutput_$TranscriptTimestamp.txt" -Force -ErrorAction | Out-Null} catch {Start-Transcript "$ScriptPath\Log\StatisticCheck_LogOutput_$TranscriptTimestamp.txt" | Out-Null}
+    try {Start-Transcript -Path "$ScriptPath\Log\IndexCheck_LogOutput_$TranscriptTimestamp.txt" -Force -ErrorAction | Out-Null} catch {Start-Transcript "$ScriptPath\Log\IndexCheck_LogOutput_$TranscriptTimestamp.txt" | Out-Null}
 }
 $IndexChecksFolderPath = "$PSScriptRoot\IndexChecks\"
 
@@ -467,8 +467,6 @@ try
         }
         catch 
         {
-            Write-Msg -Message "Error trying to run [$SummaryTsqlFile] script." -Level Error
-
             Write-Msg -Message "Error trying to run the script. $filename" -Level Error
             Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
             continue
