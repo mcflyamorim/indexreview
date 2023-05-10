@@ -47,7 +47,7 @@ DECLARE @ErrorMessage NVARCHAR(MAX)
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1'))
 DROP TABLE ##tmp1;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1'))
-CREATE TABLE ##tmp1 ([DBName] VARCHAR(MAX), [Schema] VARCHAR(MAX), [Object] VARCHAR(MAX), [Type] VARCHAR(MAX), [JobName] VARCHAR(MAX), [Step] VARCHAR(MAX), CommandFound VARCHAR(MAX));
+CREATE TABLE ##tmp1 ([DBName] VARCHAR(MAX), [Schema] VARCHAR(MAX), [Object] VARCHAR(MAX), [Type] VARCHAR(MAX), [JobName] VARCHAR(MAX), [is_enabled] BIT, [Step] VARCHAR(MAX), CommandFound VARCHAR(MAX));
 		
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblKeywords'))
 DROP TABLE #tblKeywords;
@@ -138,7 +138,7 @@ SELECT DISTINCT Object
 FROM ##tmp1
 
 SET @sqlcmd = 'USE [msdb];
-               SELECT t.[DBName], t.[Schema], t.[Object], t.[Type], sj.[name], sjs.step_name, sjs.[command]
+               SELECT t.[DBName], t.[Schema], t.[Object], t.[Type], sj.[name], sj.[enabled], sjs.step_name, sjs.[command]
                FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
                INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
                CROSS JOIN #tblKeywords tk (NOLOCK)
@@ -147,7 +147,7 @@ SET @sqlcmd = 'USE [msdb];
                AND sjs.[subsystem] IN (''TSQL'',''PowerShell'', ''CMDEXEC'');'
 
 BEGIN TRY
-	 INSERT INTO ##tmp1 ([DBName], [Schema], [Object], [Type], JobName, Step, CommandFound)
+	 INSERT INTO ##tmp1 ([DBName], [Schema], [Object], [Type], JobName, [is_enabled], Step, CommandFound)
 	 EXECUTE sp_executesql @sqlcmd
 END TRY
 BEGIN CATCH
@@ -163,6 +163,7 @@ CREATE TABLE tempdb.dbo.tmpIndexCheck40 (
            [objectName] VARCHAR(800),
            Type VARCHAR(800),
            JobName VARCHAR(800),
+           [is_enabled] BIT,
            Step VARCHAR(800),
            CommandFound VARCHAR(MAX),
            [Comment] VARCHAR(800))
@@ -177,6 +178,7 @@ BEGIN
          Object,
          Type,
          JobName,
+         [is_enabled],
          Step,
          CommandFound,
          'OK' AS Comment

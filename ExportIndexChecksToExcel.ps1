@@ -59,7 +59,7 @@ function Write-Msg {
 }
 
 function fnReturn {
-    try {Stop-Transcript -ErrorAction SilentlyContinue -WhatIf:$false | Out-Null} catch{}
+    try {Stop-Transcript -ErrorAction SilentlyContinue | Out-Null} catch{}
     exit
 }
 
