@@ -427,15 +427,15 @@ try
 		Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
 
         $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -InputFile $TsqlFile -ErrorAction Stop
+		Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -InputFile $TsqlFile -ErrorAction Stop
 
         #Using -Verbose to capture SQL Server message output
 		if ($Database){
             $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -Query $Query1 -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -Query $Query1 -Verbose -ErrorAction Stop
         }
         else{
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
         }
         Write-Msg "Finished to run sp_GetIndexInfo"
 	}
@@ -463,7 +463,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -505,7 +505,7 @@ try
 
 
         $xl = $null
-        $xl = $Result  | Select-Object * -ExcludeProperty "statement_plan", "RowError", "RowState", "Table", "ItemArray", "HasErrors" | `
+        $xl = $Result  | Select-Object * -ExcludeProperty "RowError", "RowState", "Table", "ItemArray", "HasErrors" | `
                             Export-Excel -Path $FileOutput -WorkSheetname ($filename.Name).Replace('.sql', '') `
                                         -AutoSize -MaxAutoSizeRows 200 -AutoFilter -KillExcel -ClearSheet -TableStyle Medium2 `
                                         -Title ($filename.Name).Replace('.sql', '') -TitleBold <# -FreezePane 3 #> -TitleSize 20 `
@@ -575,7 +575,7 @@ try
 				$Range = $c2 + ':' + $c3 | Out-String
 				$ws.Cells["$Range"].Style.Numberformat.Format = (Expand-NumberFormat -NumberFormat 'yyyy/mm/dd hh:mm:ss')
             }
-            elseif (($ColValue -like '*statement_text*') -Or ($ColValue -like '*indexed_columns*') -Or ($ColValue -like '*index_list*') -Or ($ColValue -like '*stats_list*') -Or ($ColValue -like '*object_code_definition*') -Or ($ColValue -like '*referenced_columns*')) {
+            elseif (($ColValue -like '*statement_plan*') -Or ($ColValue -like '*statement_text*') -Or ($ColValue -like '*indexed_columns*') -Or ($ColValue -like '*index_list*') -Or ($ColValue -like '*stats_list*') -Or ($ColValue -like '*object_code_definition*') -Or ($ColValue -like '*referenced_columns*')) {
                 Set-ExcelColumn -Worksheet $ws -Column $i -Width 30
             }
 			elseif ($ColValue -eq $null) {
@@ -594,8 +594,8 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -QueryTimeout 28800 <#8 hours#> -MaxCharLength 80000 `
+        $Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM tempdb.dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"

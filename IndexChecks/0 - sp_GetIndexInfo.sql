@@ -145,7 +145,7 @@ SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Startin
 RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
 /* Config params: */
-DECLARE @TOP BIGINT = 20000 /* By default, I'm only reading TOP 20k plans */
+DECLARE @TOP BIGINT = 5000 /* By default, I'm only reading TOP 5k plans */
 
 IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats
@@ -373,7 +373,7 @@ DECLARE @number_plans BIGINT,
 SELECT @number_plans = COUNT(*) 
 FROM #tmpdm_exec_query_stats
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to capture XML query plan for cached plans. Found ' + CONVERT(VARCHAR(200), @number_plans) + ' plans on sys.dm_exec_query_stats.'
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to capture XML query plan and statement text for cached plans. Found ' + CONVERT(VARCHAR(200), @number_plans) + ' plans on sys.dm_exec_query_stats.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 SET @i = 1
@@ -504,7 +504,19 @@ END
 CLOSE c_plans
 DEALLOCATE c_plans
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to capture XML query plan for cached plans.'
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to capture XML query plan and statement text for cached plans.'
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to remove plans bigger than 2MB.'
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+
+DECLARE @removed_plans INT = 0
+DELETE FROM #tmpdm_exec_query_stats 
+WHERE DATALENGTH(statement_plan) / 1024. > 2048 /*Ignoring big plans to avoid delay and issues when exporting it to Excel*/
+
+SET @removed_plans = @@ROWCOUNT
+
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to remove plans bigger than 2MB, removed ' + CONVERT(VARCHAR, ISNULL(@removed_plans, 0)) + ' plans.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to collect data about last minute execution count.'
