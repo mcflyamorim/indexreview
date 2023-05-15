@@ -44,10 +44,10 @@ IF OBJECT_ID('tempdb.dbo.tmpIndexCheck40') IS NOT NULL
 DECLARE @dbid int, @dbname VARCHAR(MAX), @sqlcmd NVARCHAR(MAX)
 DECLARE @ErrorMessage NVARCHAR(MAX)
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1'))
-DROP TABLE ##tmp1;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1'))
-CREATE TABLE ##tmp1 ([DBName] VARCHAR(MAX), [Schema] VARCHAR(MAX), [Object] VARCHAR(MAX), [Type] VARCHAR(MAX), [JobName] VARCHAR(MAX), [is_enabled] BIT, [Step] VARCHAR(MAX), CommandFound VARCHAR(MAX));
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1Check40'))
+DROP TABLE ##tmp1Check40;
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1Check40'))
+CREATE TABLE ##tmp1Check40 ([DBName] VARCHAR(MAX), [Schema] VARCHAR(MAX), [Object] VARCHAR(MAX), [Type] VARCHAR(MAX), [JobName] VARCHAR(MAX), [is_enabled] BIT, [Step] VARCHAR(MAX), CommandFound VARCHAR(MAX));
 		
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblKeywords'))
 DROP TABLE #tblKeywords;
@@ -118,7 +118,7 @@ BEGIN
                    AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 
     BEGIN TRY
-	     INSERT INTO ##tmp1 ([DBName], [Schema], [Object], [Type], CommandFound)
+	     INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], CommandFound)
 	     EXECUTE sp_executesql @sqlcmd
     END TRY
     BEGIN CATCH
@@ -135,19 +135,19 @@ END;
 
 INSERT INTO #tblKeywords (Keyword)
 SELECT DISTINCT Object
-FROM ##tmp1
+FROM ##tmp1Check40
 
 SET @sqlcmd = 'USE [msdb];
                SELECT t.[DBName], t.[Schema], t.[Object], t.[Type], sj.[name], sj.[enabled], sjs.step_name, sjs.[command]
                FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
                INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
                CROSS JOIN #tblKeywords tk (NOLOCK)
-               OUTER APPLY (SELECT TOP 1 * FROM ##tmp1 WHERE ##tmp1.[Object] = tk.Keyword) AS t
+               OUTER APPLY (SELECT TOP 1 * FROM ##tmp1Check40 WHERE ##tmp1Check40.[Object] = tk.Keyword) AS t
                WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sjs.[command]) COLLATE DATABASE_DEFAULT) > 0
                AND sjs.[subsystem] IN (''TSQL'',''PowerShell'', ''CMDEXEC'');'
 
 BEGIN TRY
-	 INSERT INTO ##tmp1 ([DBName], [Schema], [Object], [Type], JobName, [is_enabled], Step, CommandFound)
+	 INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], JobName, [is_enabled], Step, CommandFound)
 	 EXECUTE sp_executesql @sqlcmd
 END TRY
 BEGIN CATCH
@@ -169,7 +169,7 @@ CREATE TABLE tempdb.dbo.tmpIndexCheck40 (
            [Comment] VARCHAR(800))
 
 
-IF (SELECT COUNT(*) FROM ##tmp1) > 0
+IF (SELECT COUNT(*) FROM ##tmp1Check40) > 0
 BEGIN
   INSERT INTO tempdb.dbo.tmpIndexCheck40
 		SELECT 'Check 40 - Search for an index maintenance plan' AS [Info],
@@ -182,7 +182,7 @@ BEGIN
          Step,
          CommandFound,
          'OK' AS Comment
-  FROM ##tmp1
+  FROM ##tmp1Check40
   WHERE JobName IS NOT NULL
 END
 ELSE

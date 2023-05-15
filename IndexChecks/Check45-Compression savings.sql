@@ -23,12 +23,13 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* Config params */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
-DECLARE @database_name_filter sysname = 'Northwind' --'StackOverflow2010' /*set to null to run script in all DBs*/;
-DECLARE @min_rows BIGINT = 1000 /*Min of rows on table to be considered on estimation*/;
+DECLARE @database_name_filter sysname = '' /*set to null to run script in all DBs*/;
+DECLARE @min_rows BIGINT = 5000 /*Min of rows on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
-DECLARE @desired_compression NVARCHAR(500) = 'ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
-
+DECLARE @desired_compression NVARCHAR(500) = 'ROW, PAGE, COMPRESS' /*List of compression to be estimated*/;
+DECLARE @max_mb_to_sample NUMERIC(25, 2) = 15 /*Max of MBs to read from source table to be used to populate the temporary object*/
+DECLARE @compress_column_size BIGINT = 500 /*Min column size to be considered for COMPRESS test*/
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
 /* Config params */
@@ -93,6 +94,7 @@ BEGIN
     ON d1.replica_id = ar.replica_id
     WHERE 1=1
     AND d1.[name] = ISNULL(@database_name_filter, d1.[name])
+    AND d1.[name] IN (SELECT DISTINCT Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)
     /* I'm not interested to read DBs that are not online :-) */
     AND d1.state_desc = 'ONLINE'
     /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
@@ -123,12 +125,13 @@ BEGIN
     FROM sys.databases d1
     WHERE 1=1
     AND d1.[name] = ISNULL(@database_name_filter, d1.[name])
+    AND d1.[name] IN (SELECT DISTINCT Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)
     /* I'm not interested to read DBs that are not online :-) */
     AND d1.state_desc = 'ONLINE'
     /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
     AND d1.is_read_only = 0 
     /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-    AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+    AND d1.name NOT IN ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
 		END TRY
 		BEGIN CATCH
 			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
@@ -140,14 +143,14 @@ BEGIN
 END
 
 DECLARE @SQL NVARCHAR(MAX)
-declare @Database_Name sysname
+DECLARE @Database_Name sysname
 
-DECLARE c_databases CURSOR read_only FOR
+DECLARE c_databases CURSOR READ_ONLY FOR
     SELECT [name] FROM #db
 OPEN c_databases
 
 FETCH NEXT FROM c_databases
-into @Database_Name
+INTO @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
   SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
@@ -2529,8 +2532,8 @@ BEGIN
     SET @cmd = ''EXEC dbo.sp_estimate_data_compression_savings_v2
                        @schema_name = '''''' + @schema_name + '''''',
                        @object_name = '''''' + @object_name + '''''',
-                       @data_compression = N''''NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS'''',
-                       @max_mb_to_sample = 20, @batch_sample_size_mb = 5, @compress_column_size = 500'';
+                       @data_compression = N''''' + @desired_compression + ''''',
+                       @max_mb_to_sample = ' + CONVERT(NVARCHAR(30), @max_mb_to_sample) + ', @batch_sample_size_mb = 5, @compress_column_size = ' + CONVERT(NVARCHAR(30), @compress_column_size) + ''';
 
     EXEC (@cmd);
   END TRY
@@ -2603,14 +2606,74 @@ SELECT 'Check 45 - Estimate compression savings' AS [Info],
 INTO tempdb.dbo.tmpIndexCheck45
 FROM ##TmpCompressionResult
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck45
-ORDER BY database_name,
-         row_count DESC,
-         schema_name,
-         object_name,
-         index_id,
-         partition_number,
-         CASE estimated_data_compression
+SELECT tmpIndexCheck45.Info,
+       tmpIndexCheck45.database_name,
+       tmpIndexCheck45.object_name,
+       tmpIndexCheck45.schema_name,
+       tmpIndexCheck45.index_id,
+       tmpIndexCheck45.index_name,
+       tmpIndexCheck45.index_type_desc,
+       tmpIndexCheck45.partition_number,
+       tmpIndexCheck45.estimation_status,
+       tmpIndexCheck45.current_data_compression,
+       tmpIndexCheck45.estimated_data_compression,
+       tmpIndexCheck45.compression_ratio,
+       tmpIndexCheck45.row_count,
+       a.user_seeks + a.user_scans + a.user_lookups + a.user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
+       tab3.avg_of_access_per_minute_based_on_index_usage_dmv,
+       a.user_seeks,
+       a.user_scans,
+       a.user_lookups,
+       a.user_updates,
+       ISNULL(Number_of_Reads,0) AS number_of_reads, 
+       Tab1.[Reads_Ratio],
+       ISNULL([Total Writes],0) AS number_of_writes,	      
+       Tab2.[Writes_Ratio],       
+       a.singleton_lookup_count,
+       Tab4.singleton_lookup_ratio,
+       a.range_scan_count,
+       Tab5.range_scan_ratio,
+       a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
+       a.Buffer_Pool_SpaceUsed_MB,
+       a.Buffer_Pool_FreeSpace_MB,
+       CONVERT(NUMERIC(18, 2), (a.Buffer_Pool_FreeSpace_MB / CASE WHEN a.Buffer_Pool_SpaceUsed_MB = 0 THEN 1 ELSE a.Buffer_Pool_SpaceUsed_MB END) * 100) AS Buffer_Pool_FreeSpace_Percent,
+       tmpIndexCheck45.[size_with_current_compression_setting(GB)],
+       tmpIndexCheck45.[size_with_requested_compression_setting(GB)],
+       tmpIndexCheck45.[size_compression_saving(GB)],
+       tmpIndexCheck45.[size_with_current_compression_setting(KB)],
+       tmpIndexCheck45.[size_with_requested_compression_setting(KB)],
+       tmpIndexCheck45.[sample_size_with_current_compression_setting(KB)],
+       tmpIndexCheck45.[sample_size_with_requested_compression_setting(KB)],
+       tmpIndexCheck45.sample_pages_with_current_compression_setting,
+       tmpIndexCheck45.sample_pages_with_requested_compression_setting,
+       tmpIndexCheck45.SqlToCompressHeap
+FROM tempdb.dbo.tmpIndexCheck45
+LEFT OUTER JOIN tempdb.dbo.Tab_GetIndexInfo a
+ON a.Database_Name = tmpIndexCheck45.database_name
+AND a.Schema_Name = tmpIndexCheck45.schema_name
+AND a.Table_Name = tmpIndexCheck45.object_name
+AND a.Index_ID = tmpIndexCheck45.index_id
+OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (a.user_seeks + a.user_scans + a.user_lookups) = 0 THEN 0 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups)) * 100 /
+              		    CASE (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates)) END END AS DECIMAL(18,2))),0)) AS Tab1([Reads_Ratio])
+OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN a.user_updates = 0 THEN 0 ELSE CONVERT(REAL, a.user_updates) * 100 /
+		                  CASE (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates)) END END AS DECIMAL(18,2))),0)) AS Tab2([Writes_Ratio])
+OUTER APPLY (SELECT CONVERT(VARCHAR(200), user_seeks + user_scans + user_lookups + user_updates / 
+                             CASE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                               WHEN 0 THEN 1
+                               ELSE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                             END)) AS tab3(avg_of_access_per_minute_based_on_index_usage_dmv)
+OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (singleton_lookup_count) = 0 THEN 0 ELSE CONVERT(REAL, (singleton_lookup_count)) * 100 /
+              		    CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab4(singleton_lookup_ratio)
+OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN range_scan_count = 0 THEN 0 ELSE CONVERT(REAL, range_scan_count) * 100 /
+		                  CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab5(range_scan_ratio)
+ORDER BY tmpIndexCheck45.database_name,
+         tmpIndexCheck45.row_count DESC,
+         tmpIndexCheck45.schema_name,
+         tmpIndexCheck45.object_name,
+         tmpIndexCheck45.index_id,
+         tmpIndexCheck45.partition_number,
+         CASE tmpIndexCheck45.estimated_data_compression
            WHEN 'NONE' THEN 0
            WHEN 'ROW' THEN 1
            WHEN 'PAGE' THEN 2

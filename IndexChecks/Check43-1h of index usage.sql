@@ -655,6 +655,7 @@ ON CTE_2.database_id = a.Database_ID
 AND CTE_2.object_id = a.Object_ID
 AND CTE_2.index_id = a.Index_ID
 WHERE 1=1
+AND a.Number_Rows > 0 /*ignoring empty tables*/
 GROUP BY ISNULL(a.Database_Name, CTE_2.database_id),
        ISNULL(a.Schema_Name, '0'),
        ISNULL(a.Table_Name, CTE_2.object_id),
