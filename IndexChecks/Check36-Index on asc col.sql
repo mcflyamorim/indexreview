@@ -85,40 +85,48 @@ CREATE TABLE #TMPShowStatistics(
 
 declare @UpdateStatsCmd VARCHAR(8000), @Msg VARCHAR(8000)
 
-DBCC TRACEON(2388) WITH NO_INFOMSGS;
+BEGIN TRY
+  DBCC TRACEON(2388) WITH NO_INFOMSGS;
 
-DECLARE c_StatsCmd CURSOR read_only FOR
-    SELECT UpdateStatsCmd FROM #TMP1
-OPEN c_StatsCmd
+  DECLARE c_StatsCmd CURSOR read_only FOR
+      SELECT UpdateStatsCmd FROM #TMP1
+  OPEN c_StatsCmd
 
-FETCH NEXT FROM c_StatsCmd
-into @UpdateStatsCmd
-WHILE @@FETCH_STATUS = 0
-BEGIN
-  /*SELECT @SQL*/
-  BEGIN TRY
-    INSERT INTO #TMPShowStatistics
-    EXEC (@UpdateStatsCmd)
-
-    UPDATE #TMP1 SET LeadingType = #TMPShowStatistics.[TF2388_Leading column Type]
-    FROM #TMP1 t
-    INNER JOIN #TMPShowStatistics
-    ON t.UpdateStatsCmd = @UpdateStatsCmd
-    WHERE #TMPShowStatistics.[TF2388_Leading column Type] IS NOT NULL  
-  END TRY
-		BEGIN CATCH
-			 SELECT @Msg = 'Error trying to run ' + @UpdateStatsCmd
-    RAISERROR (@Msg, 0,0) WITH NOWAIT
-		END CATCH
-
-  TRUNCATE TABLE #TMPShowStatistics
   FETCH NEXT FROM c_StatsCmd
   into @UpdateStatsCmd
-END
-CLOSE c_StatsCmd
-DEALLOCATE c_StatsCmd
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    /*SELECT @SQL*/
+    BEGIN TRY
+      INSERT INTO #TMPShowStatistics
+      EXEC (@UpdateStatsCmd)
 
-DBCC TRACEOFF(2388) WITH NO_INFOMSGS;
+      UPDATE #TMP1 SET LeadingType = #TMPShowStatistics.[TF2388_Leading column Type]
+      FROM #TMP1 t
+      INNER JOIN #TMPShowStatistics
+      ON t.UpdateStatsCmd = @UpdateStatsCmd
+      WHERE #TMPShowStatistics.[TF2388_Leading column Type] IS NOT NULL  
+    END TRY
+		  BEGIN CATCH
+			   SELECT @Msg = 'Error trying to run ' + @UpdateStatsCmd
+      RAISERROR (@Msg, 0,0) WITH NOWAIT
+		  END CATCH
+
+    TRUNCATE TABLE #TMPShowStatistics
+    FETCH NEXT FROM c_StatsCmd
+    into @UpdateStatsCmd
+  END
+  CLOSE c_StatsCmd
+  DEALLOCATE c_StatsCmd
+END TRY
+BEGIN CATCH
+END CATCH;
+
+BEGIN TRY
+  DBCC TRACEOFF(2388) WITH NO_INFOMSGS;
+END TRY
+BEGIN CATCH
+END CATCH;
 
 SELECT *
 INTO tempdb.dbo.tmpIndexCheck36

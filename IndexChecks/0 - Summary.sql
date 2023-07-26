@@ -328,6 +328,14 @@ AS (
    FROM tempdb.dbo.tmpIndexCheck23
    UNION ALL
 
+   SELECT CONVERT(VARCHAR(8000), 'Number of tables with nonclust indexes good candidates to be recreated with clust: ') AS [info],
+          CONVERT(VARCHAR(200), COUNT(*)) AS [result],
+          'Medium' AS prioritycol,
+          'Check46' AS more_info,
+          'NA' AS quick_fix
+   FROM (SELECT DISTINCT table_name FROM tempdb.dbo.tmpIndexCheck46 WHERE comment <> 'OK') AS t
+   UNION ALL
+
    SELECT CONVERT(VARCHAR(8000), 'Number of clustered indexes with singleton lookup ratio >= 90%: ') AS [info],
           CONVERT(VARCHAR(200), COUNT(*)) AS [result],
           'Medium' AS prioritycol,

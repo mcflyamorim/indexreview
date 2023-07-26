@@ -554,7 +554,7 @@ USING XML INDEX ix1 FOR PROPERTY
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to create XML indexes on #tmpdm_exec_query_stats.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run final query and populate tmpIndexCheckCachePlanData'
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run final query and parse query plan XML and populate tmpIndexCheckCachePlanData'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheckCachePlanData') IS NOT NULL
@@ -921,7 +921,7 @@ END
 CLOSE c_plans
 DEALLOCATE c_plans
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run final query and populate tmpIndexCheckCachePlanData'
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run final query and parse query plan XML and populate tmpIndexCheckCachePlanData'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to collect cache plan info...'
@@ -937,6 +937,7 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [Schema_Name] [sys].[sysname] NOT NULL,
   [Table_Name] [sys].[sysname] NOT NULL,
   [Index_Name] [sys].[sysname] NULL,
+  [File_Group] [sys].[sysname] NULL,
   [Object_ID] INT,
   [Index_ID] INT,
   [Index_Type] [nvarchar] (60) NULL,
@@ -1342,6 +1343,7 @@ BEGIN
          sc.name AS ''Schema_Name'',
          t.name AS ''Table_Name'',
          i.name AS ''Index_Name'',
+         fg.name AS ''File_Group'',
          t.object_id,
          i.index_id,
          i.type_desc AS ''Index_Type'',
@@ -1543,6 +1545,8 @@ BEGIN
       INNER JOIN #tmp_sys_allocation_units AS au
           ON au.container_id = p.hobt_id
          AND au.type_desc = ''IN_ROW_DATA''
+      INNER JOIN sys.filegroups AS fg
+          ON fg.data_space_id = au.data_space_id
       OUTER APPLY (SELECT TOP 1 
                           1 AS TableHasLOB
                   FROM sys.tables

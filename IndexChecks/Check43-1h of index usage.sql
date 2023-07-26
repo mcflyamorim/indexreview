@@ -26,7 +26,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck43') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck43
 
-DECLARE @Minutes INT = 60 /* By default, capture data for 60 minutes */
+DECLARE @Minutes INT = 10 /* By default, capture data for 60 minutes */
 DECLARE @Database_ID INT, @Cmd NVARCHAR(MAX), @ErrMsg NVARCHAR(MAX)
 
 IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_usage_stats') IS NOT NULL
@@ -34,25 +34,25 @@ IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_usage_stats') IS NOT NULL
 
 CREATE TABLE #tmp_dm_db_index_usage_stats(
  [captured_datetime] [DATETIME2](7) NOT NULL,
-	[database_id] [smallint] NOT NULL,
-	[object_id] [int] NOT NULL,
-	[index_id] [int] NOT NULL,
-	[user_seeks] [bigint] NOT NULL,
-	[user_scans] [bigint] NOT NULL,
-	[user_lookups] [bigint] NOT NULL,
-	[user_updates] [bigint] NOT NULL,
-	[last_user_seek] [datetime] NULL,
-	[last_user_scan] [datetime] NULL,
-	[last_user_lookup] [datetime] NULL,
-	[last_user_update] [datetime] NULL,
-	[system_seeks] [bigint] NOT NULL,
-	[system_scans] [bigint] NOT NULL,
-	[system_lookups] [bigint] NOT NULL,
-	[system_updates] [bigint] NOT NULL,
-	[last_system_seek] [datetime] NULL,
-	[last_system_scan] [datetime] NULL,
-	[last_system_lookup] [datetime] NULL,
-	[last_system_update] [datetime] NULL
+	[database_id] [SMALLINT] NOT NULL,
+	[object_id] [INT] NOT NULL,
+	[index_id] [INT] NOT NULL,
+	[user_seeks] [BIGINT] NOT NULL,
+	[user_scans] [BIGINT] NOT NULL,
+	[user_lookups] [BIGINT] NOT NULL,
+	[user_updates] [BIGINT] NOT NULL,
+	[last_user_seek] [DATETIME] NULL,
+	[last_user_scan] [DATETIME] NULL,
+	[last_user_lookup] [DATETIME] NULL,
+	[last_user_update] [DATETIME] NULL,
+	[system_seeks] [BIGINT] NOT NULL,
+	[system_scans] [BIGINT] NOT NULL,
+	[system_lookups] [BIGINT] NOT NULL,
+	[system_updates] [BIGINT] NOT NULL,
+	[last_system_seek] [DATETIME] NULL,
+	[last_system_scan] [DATETIME] NULL,
+	[last_system_lookup] [DATETIME] NULL,
+	[last_system_update] [DATETIME] NULL
 )
 
 IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_operational_stats') IS NOT NULL
@@ -60,49 +60,49 @@ IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_operational_stats') IS NOT NULL
 
 CREATE TABLE #tmp_dm_db_index_operational_stats(
  [captured_datetime] [DATETIME2](7) NOT NULL,
-	[database_id] [smallint] NULL,
-	[object_id] [int] NOT NULL,
-	[index_id] [int] NOT NULL,
-	[range_scan_count] [bigint] NULL,
-	[singleton_lookup_count] [bigint] NULL,
-	[page_latch_wait_count] [bigint] NULL,
-	[page_io_latch_wait_count] [bigint] NULL,
-	[leaf_insert_count] [bigint] NULL,
-	[leaf_delete_count] [bigint] NULL,
-	[leaf_update_count] [bigint] NULL,
-	[forwarded_fetch_count] [bigint] NULL,
-	[page_latch_wait_in_ms] [bigint] NULL,
-	[leaf_ghost_count] [bigint] NULL,
-	[nonleaf_insert_count] [bigint] NULL,
-	[nonleaf_delete_count] [bigint] NULL,
-	[nonleaf_update_count] [bigint] NULL,
-	[leaf_allocation_count] [bigint] NULL,
-	[nonleaf_allocation_count] [bigint] NULL,
-	[leaf_page_merge_count] [bigint] NULL,
-	[nonleaf_page_merge_count] [bigint] NULL,
-	[lob_fetch_in_pages] [bigint] NULL,
-	[lob_fetch_in_bytes] [bigint] NULL,
-	[lob_orphan_create_count] [bigint] NULL,
-	[lob_orphan_insert_count] [bigint] NULL,
-	[row_overflow_fetch_in_pages] [bigint] NULL,
-	[row_overflow_fetch_in_bytes] [bigint] NULL,
-	[column_value_push_off_row_count] [bigint] NULL,
-	[column_value_pull_in_row_count] [bigint] NULL,
-	[row_lock_count] [bigint] NULL,
-	[row_lock_wait_count] [bigint] NULL,
-	[row_lock_wait_in_ms] [bigint] NULL,
-	[page_lock_count] [bigint] NULL,
-	[page_lock_wait_count] [bigint] NULL,
-	[page_lock_wait_in_ms] [bigint] NULL,
-	[index_lock_promotion_attempt_count] [bigint] NULL,
-	[index_lock_promotion_count] [bigint] NULL,
-	[tree_page_latch_wait_count] [bigint] NULL,
-	[tree_page_latch_wait_in_ms] [bigint] NULL,
-	[tree_page_io_latch_wait_count] [bigint] NULL,
-	[tree_page_io_latch_wait_in_ms] [bigint] NULL,
-	[avg_page_latch_wait_in_ms] [numeric](25, 2) NULL,
-	[page_io_latch_wait_in_ms] [bigint] NULL,
-	[avg_page_io_latch_wait_in_ms] [numeric](25, 2) NULL
+	[database_id] [SMALLINT] NULL,
+	[object_id] [INT] NOT NULL,
+	[index_id] [INT] NOT NULL,
+	[range_scan_count] [BIGINT] NULL,
+	[singleton_lookup_count] [BIGINT] NULL,
+	[page_latch_wait_count] [BIGINT] NULL,
+	[page_io_latch_wait_count] [BIGINT] NULL,
+	[leaf_insert_count] [BIGINT] NULL,
+	[leaf_delete_count] [BIGINT] NULL,
+	[leaf_update_count] [BIGINT] NULL,
+	[forwarded_fetch_count] [BIGINT] NULL,
+	[page_latch_wait_in_ms] [BIGINT] NULL,
+	[leaf_ghost_count] [BIGINT] NULL,
+	[nonleaf_insert_count] [BIGINT] NULL,
+	[nonleaf_delete_count] [BIGINT] NULL,
+	[nonleaf_update_count] [BIGINT] NULL,
+	[leaf_allocation_count] [BIGINT] NULL,
+	[nonleaf_allocation_count] [BIGINT] NULL,
+	[leaf_page_merge_count] [BIGINT] NULL,
+	[nonleaf_page_merge_count] [BIGINT] NULL,
+	[lob_fetch_in_pages] [BIGINT] NULL,
+	[lob_fetch_in_bytes] [BIGINT] NULL,
+	[lob_orphan_create_count] [BIGINT] NULL,
+	[lob_orphan_insert_count] [BIGINT] NULL,
+	[row_overflow_fetch_in_pages] [BIGINT] NULL,
+	[row_overflow_fetch_in_bytes] [BIGINT] NULL,
+	[column_value_push_off_row_count] [BIGINT] NULL,
+	[column_value_pull_in_row_count] [BIGINT] NULL,
+	[row_lock_count] [BIGINT] NULL,
+	[row_lock_wait_count] [BIGINT] NULL,
+	[row_lock_wait_in_ms] [BIGINT] NULL,
+	[page_lock_count] [BIGINT] NULL,
+	[page_lock_wait_count] [BIGINT] NULL,
+	[page_lock_wait_in_ms] [BIGINT] NULL,
+	[index_lock_promotion_attempt_count] [BIGINT] NULL,
+	[index_lock_promotion_count] [BIGINT] NULL,
+	[tree_page_latch_wait_count] [BIGINT] NULL,
+	[tree_page_latch_wait_in_ms] [BIGINT] NULL,
+	[tree_page_io_latch_wait_count] [BIGINT] NULL,
+	[tree_page_io_latch_wait_in_ms] [BIGINT] NULL,
+	[avg_page_latch_wait_in_ms] [NUMERIC](25, 2) NULL,
+	[page_io_latch_wait_in_ms] [BIGINT] NULL,
+	[avg_page_io_latch_wait_in_ms] [NUMERIC](25, 2) NULL
 )
 
 IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
@@ -265,7 +265,7 @@ BEGIN
 
   /* Wait for 1 minute between each pool */
   WAITFOR DELAY '00:01:00.000'
-  --WAITFOR DELAY '00:00:01.000'
+  --WAITFOR DELAY '00:00:05.000'
 END
 
 CREATE CLUSTERED INDEX ix1 ON #tmp_dm_db_index_usage_stats (database_id, object_id, index_id, captured_datetime)
@@ -286,9 +286,13 @@ SELECT ios.captured_datetime,
        ios.object_id,
        ios.index_id,
        ius.user_seeks - LAG(ius.user_seeks, 1, ius.user_seeks) OVER(PARTITION BY ius.database_id, ius.object_id, ius.index_id ORDER BY ius.captured_datetime) AS user_seeks,
+       ius.user_seeks AS total_user_seeks,
        ius.user_scans - LAG(ius.user_scans, 1, ius.user_scans) OVER(PARTITION BY ius.database_id, ius.object_id, ius.index_id ORDER BY ius.captured_datetime) AS user_scans,
+       ius.user_scans AS total_user_scans,
        ius.user_lookups - LAG(ius.user_lookups, 1, ius.user_lookups) OVER(PARTITION BY ius.database_id, ius.object_id, ius.index_id ORDER BY ius.captured_datetime) AS user_lookups,
+       ius.user_lookups AS total_user_lookups,
        ius.user_updates - LAG(ius.user_updates, 1, ius.user_updates) OVER(PARTITION BY ius.database_id, ius.object_id, ius.index_id ORDER BY ius.captured_datetime) AS user_updates,
+       ius.user_updates AS total_user_updates,
        ius.last_user_seek,
        ius.last_user_scan,
        ius.last_user_lookup,
@@ -302,15 +306,19 @@ SELECT ios.captured_datetime,
        ius.last_system_lookup,
        ius.last_system_update,
        ios.range_scan_count - LAG(ios.range_scan_count, 1, ios.range_scan_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS range_scan_count,
+       ios.range_scan_count AS total_range_scan_count,
        ios.singleton_lookup_count - LAG(ios.singleton_lookup_count, 1, ios.singleton_lookup_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS singleton_lookup_count,
+       ios.singleton_lookup_count AS total_singleton_lookup_count,
        ios.page_latch_wait_count - LAG(ios.page_latch_wait_count, 1, ios.page_latch_wait_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS page_latch_wait_count,
        ios.page_io_latch_wait_count - LAG(ios.page_io_latch_wait_count, 1, ios.page_io_latch_wait_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS page_io_latch_wait_count,
        ios.leaf_insert_count - LAG(ios.leaf_insert_count, 1, ios.leaf_insert_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS leaf_insert_count,
        ios.leaf_delete_count - LAG(ios.leaf_delete_count, 1, ios.leaf_delete_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS leaf_delete_count,
        ios.leaf_update_count - LAG(ios.leaf_update_count, 1, ios.leaf_update_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS leaf_update_count,
        ios.forwarded_fetch_count - LAG(ios.forwarded_fetch_count, 1, ios.forwarded_fetch_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS forwarded_fetch_count,
+       ios.forwarded_fetch_count AS total_forwarded_fetch_count,
        ios.page_latch_wait_in_ms - LAG(ios.page_latch_wait_in_ms, 1, ios.page_latch_wait_in_ms) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS page_latch_wait_in_ms,
        ios.leaf_ghost_count - LAG(ios.leaf_ghost_count, 1, ios.leaf_ghost_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS leaf_ghost_count,
+       ios.leaf_ghost_count AS total_leaf_ghost_count,
        ios.nonleaf_insert_count - LAG(ios.nonleaf_insert_count, 1, ios.nonleaf_insert_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS nonleaf_insert_count,
        ios.nonleaf_delete_count - LAG(ios.nonleaf_delete_count, 1, ios.nonleaf_delete_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS nonleaf_delete_count,
        ios.nonleaf_update_count - LAG(ios.nonleaf_update_count, 1, ios.nonleaf_update_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS nonleaf_update_count,
@@ -334,6 +342,7 @@ SELECT ios.captured_datetime,
        ios.page_lock_wait_in_ms - LAG(ios.page_lock_wait_in_ms, 1, ios.page_lock_wait_in_ms) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS page_lock_wait_in_ms,
        ios.index_lock_promotion_attempt_count - LAG(ios.index_lock_promotion_attempt_count, 1, ios.index_lock_promotion_attempt_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS index_lock_promotion_attempt_count,
        ios.index_lock_promotion_count - LAG(ios.index_lock_promotion_count, 1, ios.index_lock_promotion_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS index_lock_promotion_count,
+       ios.index_lock_promotion_count AS total_index_lock_promotion_count,
        ios.tree_page_latch_wait_count - LAG(ios.tree_page_latch_wait_count, 1, ios.tree_page_latch_wait_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS tree_page_latch_wait_count,
        ios.tree_page_latch_wait_in_ms - LAG(ios.tree_page_latch_wait_in_ms, 1, ios.tree_page_latch_wait_in_ms) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS tree_page_latch_wait_in_ms,
        ios.tree_page_io_latch_wait_count - LAG(ios.tree_page_io_latch_wait_count, 1, ios.tree_page_io_latch_wait_count) OVER(PARTITION BY ios.database_id, ios.object_id, ios.index_id ORDER BY ios.captured_datetime) AS tree_page_io_latch_wait_count,
@@ -357,13 +366,69 @@ SELECT CTE_1.captured_datetime,
        CTE_1.object_id,
        CTE_1.index_id,
        CASE WHEN CTE_1.user_seeks                    < 0 THEN 0 ELSE CTE_1.user_seeks                   END AS user_seeks,
+       total_user_seeks,
        CASE WHEN CTE_1.user_scans                    < 0 THEN 0 ELSE CTE_1.user_scans                   END AS user_scans,
+       total_user_scans,
        CASE WHEN CTE_1.user_lookups                  < 0 THEN 0 ELSE CTE_1.user_lookups                 END AS user_lookups,
+       total_user_lookups,
        CASE WHEN CTE_1.user_updates                  < 0 THEN 0 ELSE CTE_1.user_updates                 END AS user_updates,
+       total_user_updates,
        last_user_seek,
        last_user_scan,
        last_user_lookup,
        last_user_update,
+       CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END AS user_reads,
+       CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END AS user_writes,
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END)) * 100
+                    / CASE CONVERT(REAL, (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END + CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END))
+                        WHEN 0 THEN 1
+                        ELSE CONVERT(REAL, (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END + CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END))
+                      END
+                END AS DECIMAL(18, 2)))) + '%' AS user_reads_ratio,
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, (CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END)) * 100
+                    / CASE CONVERT(REAL, (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END + CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END))
+                        WHEN 0 THEN 1
+                        ELSE CONVERT(REAL, (CASE WHEN CTE_1.user_seeks < 0 THEN 0 ELSE CTE_1.user_seeks END + CASE WHEN CTE_1.user_scans < 0 THEN 0 ELSE CTE_1.user_scans END + CASE WHEN CTE_1.user_lookups < 0 THEN 0 ELSE CTE_1.user_lookups END + CASE WHEN CTE_1.user_updates < 0 THEN 0 ELSE CTE_1.user_updates END))
+                      END
+                END AS DECIMAL(18, 2)))) + '%' AS user_writes_ratio,
+       CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups AS total_user_reads,
+       CTE_1.total_user_updates AS total_user_writes,
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups)) * 100
+                    / CASE CONVERT(REAL, (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups + CTE_1.total_user_updates))
+                        WHEN 0 THEN 1
+                        ELSE CONVERT(REAL, (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups + CTE_1.total_user_updates))
+                      END
+                END AS DECIMAL(18, 2)))) + '%' AS total_user_reads_ratio,
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (CTE_1.total_user_updates) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, (CTE_1.total_user_updates)) * 100
+                    / CASE CONVERT(REAL, (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups + CTE_1.total_user_updates))
+                        WHEN 0 THEN 1
+                        ELSE CONVERT(REAL, (CTE_1.total_user_seeks + CTE_1.total_user_scans + CTE_1.total_user_lookups + CTE_1.total_user_updates))
+                      END
+                END AS DECIMAL(18, 2)))) + '%' AS total_user_writes_ratio,
        CASE WHEN CTE_1.system_seeks                    < 0 THEN 0 ELSE CTE_1.system_seeks                   END AS system_seeks,
        CASE WHEN CTE_1.system_scans                    < 0 THEN 0 ELSE CTE_1.system_scans                   END AS system_scans,
        CASE WHEN CTE_1.system_lookups                  < 0 THEN 0 ELSE CTE_1.system_lookups                 END AS system_lookups,
@@ -373,15 +438,19 @@ SELECT CTE_1.captured_datetime,
        last_system_lookup,
        last_system_update,
        CASE WHEN CTE_1.range_scan_count                    < 0 THEN 0 ELSE CTE_1.range_scan_count                   END AS range_scan_count,
+       total_range_scan_count,
        CASE WHEN CTE_1.singleton_lookup_count              < 0 THEN 0 ELSE CTE_1.singleton_lookup_count             END AS singleton_lookup_count,
+       total_singleton_lookup_count,
        CASE WHEN CTE_1.page_latch_wait_count               < 0 THEN 0 ELSE CTE_1.page_latch_wait_count              END AS page_latch_wait_count,
        CASE WHEN CTE_1.page_io_latch_wait_count            < 0 THEN 0 ELSE CTE_1.page_io_latch_wait_count           END AS page_io_latch_wait_count,
        CASE WHEN CTE_1.leaf_insert_count                   < 0 THEN 0 ELSE CTE_1.leaf_insert_count                  END AS leaf_insert_count,
        CASE WHEN CTE_1.leaf_delete_count                   < 0 THEN 0 ELSE CTE_1.leaf_delete_count                  END AS leaf_delete_count,
        CASE WHEN CTE_1.leaf_update_count                   < 0 THEN 0 ELSE CTE_1.leaf_update_count                  END AS leaf_update_count,
        CASE WHEN CTE_1.forwarded_fetch_count               < 0 THEN 0 ELSE CTE_1.forwarded_fetch_count              END AS forwarded_fetch_count,
+       total_forwarded_fetch_count, 
        CASE WHEN CTE_1.page_latch_wait_in_ms               < 0 THEN 0 ELSE CTE_1.page_latch_wait_in_ms              END AS page_latch_wait_in_ms,
        CASE WHEN CTE_1.leaf_ghost_count                    < 0 THEN 0 ELSE CTE_1.leaf_ghost_count                   END AS leaf_ghost_count,
+       total_leaf_ghost_count,
        CASE WHEN CTE_1.nonleaf_insert_count                < 0 THEN 0 ELSE CTE_1.nonleaf_insert_count               END AS nonleaf_insert_count,
        CASE WHEN CTE_1.nonleaf_delete_count                < 0 THEN 0 ELSE CTE_1.nonleaf_delete_count               END AS nonleaf_delete_count,
        CASE WHEN CTE_1.nonleaf_update_count                < 0 THEN 0 ELSE CTE_1.nonleaf_update_count               END AS nonleaf_update_count,
@@ -404,6 +473,7 @@ SELECT CTE_1.captured_datetime,
        CASE WHEN CTE_1.page_lock_wait_count                < 0 THEN 0 ELSE CTE_1.page_lock_wait_count               END AS page_lock_wait_count,
        CASE WHEN CTE_1.page_lock_wait_in_ms                < 0 THEN 0 ELSE CTE_1.page_lock_wait_in_ms               END AS page_lock_wait_in_ms,
        CASE WHEN CTE_1.index_lock_promotion_attempt_count  < 0 THEN 0 ELSE CTE_1.index_lock_promotion_attempt_count END AS index_lock_promotion_attempt_count,
+       total_index_lock_promotion_count,
        CASE WHEN CTE_1.index_lock_promotion_count          < 0 THEN 0 ELSE CTE_1.index_lock_promotion_count         END AS index_lock_promotion_count,
        CASE WHEN CTE_1.tree_page_latch_wait_count          < 0 THEN 0 ELSE CTE_1.tree_page_latch_wait_count         END AS tree_page_latch_wait_count,
        CASE WHEN CTE_1.tree_page_latch_wait_in_ms          < 0 THEN 0 ELSE CTE_1.tree_page_latch_wait_in_ms         END AS tree_page_latch_wait_in_ms,
@@ -419,7 +489,8 @@ SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Inf
        ISNULL(a.Schema_Name, '0') AS Schema_Name,
        ISNULL(a.Table_Name, CTE_2.object_id) AS Table_Name,
        ISNULL(a.Index_Name, CTE_2.index_id) AS Index_Name,
-       a.Index_Type,
+       a.Index_Type,       
+       a.File_Group,
        a.Number_Rows AS current_number_of_rows_table,
        a.last_datetime_obj_was_used,
        a.ReservedSizeInMB,
@@ -429,22 +500,34 @@ SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Inf
        CONVERT(NUMERIC(18, 2), a.avg_page_space_used_in_percent) AS avg_page_space_used_in_percent,
        COUNT(*) AS number_of_pooled_samples,
        /*Index usage info*/
+       MAX(CTE_2.user_reads) AS user_reads,
+       MAX(CTE_2.user_writes) AS user_writes,
+       MAX(CTE_2.user_reads_ratio) AS user_reads_ratio,
+       MAX(CTE_2.user_writes_ratio) AS user_writes_ratio,
+       MAX(CTE_2.total_user_reads) AS total_user_reads,
+       MAX(CTE_2.total_user_writes) AS total_user_writes,
+       MAX(CTE_2.total_user_reads_ratio) AS total_user_reads_ratio,
+       MAX(CTE_2.total_user_writes_ratio) AS total_user_writes_ratio,
        SUM(CTE_2.user_seeks) AS user_seeks,
        MIN(CTE_2.user_seeks) AS user_seeks_min,
        MAX(CTE_2.user_seeks) AS user_seeks_max,
        AVG(CTE_2.user_seeks) AS user_seeks_avg,
+       MAX(CTE_2.total_user_seeks) AS total_user_seeks,
        SUM(CTE_2.user_scans) AS user_scans,
        MIN(CTE_2.user_scans) AS user_scans_min,
        MAX(CTE_2.user_scans) AS user_scans_max,
        AVG(CTE_2.user_scans) AS user_scans_avg,
+       MAX(CTE_2.total_user_scans) AS total_user_scans,
        SUM(CTE_2.user_lookups) AS user_lookups,
        MIN(CTE_2.user_lookups) AS user_lookups_min,
        MAX(CTE_2.user_lookups) AS user_lookups_max,
        AVG(CTE_2.user_lookups) AS user_lookups_avg,
+       MAX(CTE_2.total_user_lookups) AS total_user_lookups,
        SUM(CTE_2.user_updates) AS user_updates,
        MIN(CTE_2.user_updates) AS user_updates_min,
        MAX(CTE_2.user_updates) AS user_updates_max,
        AVG(CTE_2.user_updates) AS user_updates_avg,
+       MAX(CTE_2.total_user_updates) AS total_user_updates,
        SUM(CTE_2.system_seeks) AS system_seeks,
        MIN(CTE_2.system_seeks) AS system_seeks_min,
        MAX(CTE_2.system_seeks) AS system_seeks_max,
@@ -469,16 +552,38 @@ SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Inf
        MAX(CTE_2.last_system_scan)   AS last_datetime_system_scan,
        MAX(CTE_2.last_system_lookup) AS last_datetime_system_lookup,
        MAX(CTE_2.last_system_update) AS last_datetime_system_update,
-       /*Range Scan*/
-       SUM(CTE_2.range_scan_count) AS range_scan,
-       MIN(CTE_2.range_scan_count) AS range_scan_min,
-       MAX(CTE_2.range_scan_count) AS range_scan_max,
-       AVG(CTE_2.range_scan_count) AS range_scan_avg,
        /*Singleton lookup*/
        SUM(CTE_2.singleton_lookup_count) AS singleton_lookup,
        MIN(CTE_2.singleton_lookup_count) AS singleton_lookup_min,
        MAX(CTE_2.singleton_lookup_count) AS singleton_lookup_max,
        AVG(CTE_2.singleton_lookup_count) AS singleton_lookup_avg,
+       MAX(CTE_2.total_singleton_lookup_count) AS total_singleton_lookup_count,
+
+       /*Range Scan*/
+       SUM(CTE_2.range_scan_count) AS range_scan,
+       MIN(CTE_2.range_scan_count) AS range_scan_min,
+       MAX(CTE_2.range_scan_count) AS range_scan_max,
+       AVG(CTE_2.range_scan_count) AS range_scan_avg,
+       MAX(CTE_2.total_range_scan_count) AS total_range_scan,
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (MAX(CTE_2.total_singleton_lookup_count) + MAX(CTE_2.total_range_scan_count)) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, MAX(CTE_2.total_singleton_lookup_count)) * 100
+                    / CONVERT(REAL, (MAX(CTE_2.total_singleton_lookup_count) + MAX(CTE_2.total_range_scan_count)))
+                END AS DECIMAL(18, 2)))) + '%' AS [singleton_lookup_ratio],
+       RTRIM(
+         CONVERT(
+           NVARCHAR(10),
+           CAST(CASE
+                  WHEN (MAX(CTE_2.total_singleton_lookup_count) + MAX(CTE_2.total_range_scan_count)) = 0 THEN 0
+                  ELSE
+                    CONVERT(REAL, MAX(CTE_2.total_range_scan_count)) * 100
+                    / CONVERT(REAL, (MAX(CTE_2.total_singleton_lookup_count) + MAX(CTE_2.total_range_scan_count)))
+                END AS DECIMAL(18, 2)))) + '%' AS [range_scan_ratio],
+
        /*Leaf insert/delete/update*/
        SUM(CTE_2.leaf_insert_count) AS leaf_insert,
        MIN(CTE_2.leaf_insert_count) AS leaf_insert_min,
@@ -561,16 +666,19 @@ SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Inf
        MIN(CTE_2.index_lock_promotion_count) AS index_lock_promotion_min,
        MAX(CTE_2.index_lock_promotion_count) AS index_lock_promotion_max,
        AVG(CTE_2.index_lock_promotion_count) AS index_lock_promotion_avg,
+       MAX(CTE_2.total_index_lock_promotion_count) AS total_index_lock_promotion_count,
        /*Forwarded records*/
        SUM(CTE_2.forwarded_fetch_count) AS forwarded_fetch,
        MIN(CTE_2.forwarded_fetch_count) AS forwarded_fetch_min,
        MAX(CTE_2.forwarded_fetch_count) AS forwarded_fetch_max,
        AVG(CTE_2.forwarded_fetch_count) AS forwarded_fetch_avg,
+       MAX(CTE_2.total_forwarded_fetch_count) AS total_forwarded_fetch_count,
        /*Ghost*/
        SUM(CTE_2.leaf_ghost_count) AS leaf_ghost,
        MIN(CTE_2.leaf_ghost_count) AS leaf_ghost_min,
        MAX(CTE_2.leaf_ghost_count) AS leaf_ghost_max,
        AVG(CTE_2.leaf_ghost_count) AS leaf_ghost_avg,
+       MAX(CTE_2.total_leaf_ghost_count) AS total_leaf_ghost_count,
        /*NonLeaf insert/delete/update/allocation*/
        SUM(CTE_2.nonleaf_insert_count) AS nonleaf_insert,
        MIN(CTE_2.nonleaf_insert_count) AS nonleaf_insert_min,
@@ -661,6 +769,7 @@ GROUP BY ISNULL(a.Database_Name, CTE_2.database_id),
        ISNULL(a.Table_Name, CTE_2.object_id),
        ISNULL(a.Index_Name, CTE_2.index_id),
        a.Index_Type,
+       a.File_Group,
        a.Number_Rows,
        a.last_datetime_obj_was_used,
        a.ReservedSizeInMB,
