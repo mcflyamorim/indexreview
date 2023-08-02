@@ -26,7 +26,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck43') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck43
 
-DECLARE @Minutes INT = 10 /* By default, capture data for 60 minutes */
+DECLARE @Minutes INT = 60 /* By default, capture data for 60 minutes */
 DECLARE @Database_ID INT, @Cmd NVARCHAR(MAX), @ErrMsg NVARCHAR(MAX)
 
 IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_usage_stats') IS NOT NULL
