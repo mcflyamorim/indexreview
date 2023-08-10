@@ -63,7 +63,7 @@ BEGIN
   --RAISERROR (@ErrMsg, 10, 1) WITH NOWAIT
 
 
-  SET @SQL = 'use [' + @Database_Name + ']; 
+  SET @SQL = 'use [' + @Database_Name + ']; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
               IF OBJECT_ID(''tempdb.dbo.#tmpsql_modules'') IS NOT NULL
                 DROP TABLE #tmpsql_modules
 
