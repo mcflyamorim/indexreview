@@ -46,6 +46,7 @@ SELECT 'Check 10 - Unused or rarely used indexes' AS [Info],
         user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
         a.last_datetime_obj_was_used,
         tab3.avg_of_access_per_minute_based_on_index_usage_dmv,
+        a.plan_cache_reference_count,
         CASE 
           WHEN ISNULL(Number_of_Reads,0) = 0 AND ISNULL([Total Writes],0) > 0 THEN '[Unused index with update. It is recommended to revise the need to maintain all these objects as soon as possible]'
           ELSE  'OK'

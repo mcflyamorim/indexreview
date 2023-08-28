@@ -29,9 +29,9 @@ param
     [String] $SQLInstance = "DELLFABIANO\SQL2019",
     [String]$UserName,
     [String]$Password,
-    [String]$Database,
+    [String]$Database = "",
     [parameter(Mandatory=$false)]
-    [String] $LogFilePath = "C:\temp",
+    [String] $LogFilePath = "C:\Temp\IndexReview",
     [parameter(Mandatory=$false)]
     [switch]$Force_sp_GetIndexInfo_Execution,
     [switch]$CreateTranscriptLog,
@@ -184,12 +184,9 @@ function Add-ExcelImage {
 }
 
 Clear-Host
-
-#$Database = 'Northwind'
-#$Force_sp_GetIndexInfo_Execution = $true
+$CurrentDate = Get-Date
 
 # Params
-#$SQLInstance = 'dellfabiano\sql2019'
 $ScriptPath = split-path -parent $MyInvocation.MyCommand.Definition
 if ($CreateTranscriptLog){
     $TranscriptTimestamp = Get-Date -format "yyyyMMdd_HH_mm_ss_fff"
@@ -213,8 +210,19 @@ if(!(Test-Path $LogFilePath ))
         fnReturn
     }
 }
+# Check if $LogFilePathQueryPlans directory exists, if not, create it.
+$LogFilePathQueryPlans = $LogFilePath + "QueryPlans_" + $CurrentDate.ToString("yyyyMMdd") + "_" + $CurrentDate.ToString("hhmm")
+if(!(Test-Path $LogFilePathQueryPlans))
+{
+    try {
+        Write-Msg -Message "Creating directory: $LogFilePathQueryPlans'" -VerboseMsg
+        New-Item $LogFilePathQueryPlans -type Directory | Out-Null
+    } catch {
+        throw "Can't create $LogFilePathQueryPlans. You may need to Run as Administrator: $_"
+        fnReturn
+    }
+}
 
-$CurrentDate = Get-Date
 $IndexChecksFolderPath = "$PSScriptRoot\IndexChecks\"
 $instance = $SQLInstance
 $SQLInstance = $SQLInstance.Replace('\','').Replace('/','').Replace(':','').Replace('*','').Replace('?','').Replace('"','').Replace('<','').Replace('>','').Replace('|','')
@@ -427,25 +435,25 @@ try
 		Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
 
         $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -InputFile $TsqlFile -ErrorAction Stop
+		Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -QueryTimeout 86400 <#24 hours#> -InputFile $TsqlFile -ErrorAction Stop
 
         #Using -Verbose to capture SQL Server message output
 		if ($Database){
             $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -Query $Query1 -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -QueryTimeout 86400 <#24 hours#> -Verbose -ErrorAction Stop
         }
         else{
-            Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -QueryTimeout 86400 <#24 hours#> -Verbose -ErrorAction Stop
         }
         Write-Msg "Finished to run sp_GetIndexInfo"
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
-	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "tempdb" -Query "SELECT ISNULL(OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "tempdb" -Query "SELECT ISNULL(OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -QueryTimeout 86400 <#24 hours#> -ErrorAction Stop | Select-Object -ExpandProperty ObjID
 
 	if ($Result -eq 0) {
-		Write-Error "Could not find table tempdb.dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
-        Write-Error "Use option -Force_sp_GetIndexInfo_Execution to create and execute the proc" -Level Error
+		Write-Msg "Could not find table tempdb.dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
+        Write-Msg "Use option -Force_sp_GetIndexInfo_Execution to create and execute the proc" -Level Error
         fnReturn
 	}
 
@@ -459,11 +467,11 @@ try
     foreach ($filename in $files)
     {
         $dt = Get-Date -Format 'yyyy-MM-dd hh:mm:ss'
-	    [string]$str = " Running [" + ($filename.Name) + "]"
+	    [string]$str = "Running [" + ($filename.Name) + "]"
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -505,7 +513,7 @@ try
 
 
         $xl = $null
-        $xl = $Result  | Select-Object * -ExcludeProperty "RowError", "RowState", "Table", "ItemArray", "HasErrors" | `
+        $xl = $Result  | Select-Object * -ExcludeProperty "RowError", "RowState", "Table", "ItemArray", "HasErrors", "statement_plan" | `
                             Export-Excel -Path $FileOutput -WorkSheetname ($filename.Name).Replace('.sql', '') `
                                         -AutoSize -MaxAutoSizeRows 200 -AutoFilter -KillExcel -ClearSheet -TableStyle Medium2 `
                                         -Title ($filename.Name).Replace('.sql', '') -TitleBold <# -FreezePane 3 #> -TitleSize 20 `
@@ -586,16 +594,41 @@ try
         Close-ExcelPackage $xl #-Show
         $SecondsToRun = ((New-TimeSpan -Start $dt -End (Get-Date)).Seconds) + ((New-TimeSpan -Start $dt -End (Get-Date)).Minutes * 60)
 		$dt = Get-Date -Format 'yyyy-MM-dd hh:mm:ss'
-	    [string]$str = " Finished to write results on spreadsheet, duration = " + $SecondsToRun.ToString()
-        Write-Msg $str        
+	    [string]$str = "Finished to write results on spreadsheet, duration = " + $SecondsToRun.ToString()
+        Write-Msg $str
+
+        try{
+            if (($filename.Name) -like "*Plan cache usage*" ){
+                $ResultRowCountCur = 1
+                foreach ($row in $Result)
+                {
+                    $dt = Get-Date -Format 'yyyy-MM-dd hh:mm:ss'
+                    
+                    if (![string]::IsNullOrEmpty($row.statement_plan)) { 
+                        $row.statement_plan | Format-Table -AutoSize -Property * | Out-String -Width 2147483647 | Out-File -FilePath "$LogFilePathQueryPlans\QueryPlan_$($row.query_hash).sqlplan" -Encoding unicode -Force
+                    }
+                    $SecondsToRun = ((New-TimeSpan -Start $dt -End (Get-Date)).Seconds) + ((New-TimeSpan -Start $dt -End (Get-Date)).Minutes * 60)
+                    $dt = Get-Date -Format 'yyyy-MM-dd hh:mm:ss'
+                    [string]$str = "Exporting plan cache info ($ResultRowCountCur of $($Result.Count)) - Finished to write $LogFilePathQueryPlans\QueryPlan_$($row.query_hash).sqlplan file , duration = " + $SecondsToRun.ToString()
+                    Write-Msg $str
+                    $ResultRowCountCur = $ResultRowCountCur + 1
+                }
+            }
+        }
+        catch 
+        {
+            Write-Msg -Message "Error trying to export file." -Level Error
+            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+            continue
+        }
     }
 
     try{
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params –ServerInstance $instance -Database "master" -MaxCharLength 10000000 `
+        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM tempdb.dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"

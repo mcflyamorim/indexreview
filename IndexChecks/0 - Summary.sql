@@ -119,6 +119,31 @@ AS (
    ORDER BY tab1.avg_of_access_per_minute_based_on_index_usage_dmv DESC
    UNION ALL
 
+   SELECT CONVERT(VARCHAR(8000), 'Number of tables with incorrect rowcount:')  AS [info],
+          CONVERT(VARCHAR(200), COUNT(DISTINCT tmpIndexCheck5.Database_Name + tmpIndexCheck5.Schema_Name + tmpIndexCheck5.Table_Name)) AS [result],
+          'NA' AS prioritycol,
+          'Check5' AS more_info,
+          'NA' AS quick_fix
+   FROM tempdb.dbo.tmpIndexCheck5
+   UNION ALL
+
+   SELECT CONVERT(VARCHAR(8000), 'Number of objects with dangerous set:')  AS [info],
+          CONVERT(VARCHAR(200), COUNT(DISTINCT tmpIndexCheck6.DatabaseName + tmpIndexCheck6.SchemaName + tmpIndexCheck6.ObjectName)) AS [result],
+          'NA' AS prioritycol,
+          'Check6' AS more_info,
+          'NA' AS quick_fix
+   FROM tempdb.dbo.tmpIndexCheck6
+   UNION ALL
+
+   SELECT CONVERT(VARCHAR(8000), 'Number of tables with incorrect filtered index definition:')  AS [info],
+          CONVERT(VARCHAR(200), COUNT(DISTINCT tmpIndexCheck7.Database_Name + tmpIndexCheck7.Schema_Name + tmpIndexCheck7.Table_Name)) AS [result],
+          'NA' AS prioritycol,
+          'Check7' AS more_info,
+          'NA' AS quick_fix
+   FROM tempdb.dbo.tmpIndexCheck7
+   WHERE Comment <> 'OK'
+   UNION ALL
+
    SELECT CONVERT(VARCHAR(8000), 'Found a index maintenance plan: ') AS [info],
           CONVERT(VARCHAR(200), CASE WHEN EXISTS(SELECT 1 FROM tempdb.dbo.tmpIndexCheck17 WHERE comment = 'OK') THEN 1 ELSE 0 END) AS [result],
           'High' AS prioritycol,

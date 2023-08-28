@@ -409,7 +409,34 @@ BEGIN
     CROSS APPLY sys.dm_exec_text_query_plan(qs.plan_handle,
                                             qs.statement_start_offset,
                                             qs.statement_end_offset) AS detqp
-    OUTER APPLY (SELECT TRY_CONVERT(XML, detqp.query_plan)) AS t0 (query_plan)
+    OUTER APPLY (SELECT TRY_CONVERT(XML, STUFF(detqp.query_plan,
+                                               CHARINDEX(N'<BatchSequence>', detqp.query_plan),
+                                               0,
+                                               (
+                                                   SELECT ISNULL(stat.c_data,'<?dm_exec_query_stats ---- QueryStats not found. ----?>') + 
+                                                          ISNULL(attrs.c_data, '<?dm_exec_plan_attributes ---- PlanAttributes not found. ----?>')
+                                                   FROM (
+                                                           SELECT t_last_value.*
+                                                           FROM #tmpdm_exec_query_stats_indx AS a
+                                                           CROSS APPLY (SELECT TOP 1 b.*
+                                                                        FROM #tmpdm_exec_query_stats_indx AS b
+                                                                        WHERE b.query_hash = a.query_hash
+                                                                        ORDER BY b.last_execution_time DESC) AS t_last_value
+                                                           WHERE a.plan_handle = @plan_handle
+                                                           AND a.statement_start_offset = @statement_start_offset
+                                                           AND a.statement_end_offset = @statement_end_offset
+                                                           FOR XML RAW('Stats'), ROOT('dm_exec_query_stats'), BINARY BASE64
+                                                       ) AS stat(c_data)
+                                                   OUTER APPLY (
+                                                           SELECT pvt.*
+                                                           FROM (
+                                                               SELECT epa.attribute, epa.value
+                                                               FROM sys.dm_exec_plan_attributes(@plan_handle) AS epa) AS ecpa   
+                                                           PIVOT (MAX(ecpa.value) FOR ecpa.attribute IN ("set_options","objectid","dbid","dbid_execute","user_id","language_id","date_format","date_first","compat_level","status","required_cursor_options","acceptable_cursor_options","merge_action_type","is_replication_specific","optional_spid","optional_clr_trigger_dbid","optional_clr_trigger_objid","parent_plan_handle","inuse_exec_context","free_exec_context","hits_exec_context","misses_exec_context","removed_exec_context","inuse_cursors","free_cursors","hits_cursors","misses_cursors","removed_cursors","sql_handle")) AS pvt
+                                                           FOR XML RAW('Attr'), ROOT('dm_exec_plan_attributes'), BINARY BASE64
+                                                       ) AS attrs(c_data)
+                                                   )
+                                               ))) AS t0 (query_plan)
     OUTER APPLY t0.query_plan.nodes('//p:Batch') AS Batch(x)
     OUTER APPLY (SELECT COALESCE(Batch.x.value('(//p:StmtSimple/@StatementText)[1]', 'VarChar(MAX)'),
                                  Batch.x.value('(//p:StmtCond/@StatementText)[1]', 'VarChar(MAX)'),
@@ -507,17 +534,17 @@ DEALLOCATE c_plans
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to capture XML query plan and statement text for cached plans.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to remove plans bigger than 2MB.'
-RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+--SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to remove plans bigger than 2MB.'
+--RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-DECLARE @removed_plans INT = 0
-DELETE FROM #tmpdm_exec_query_stats 
-WHERE DATALENGTH(statement_plan) / 1024. > 2048 /*Ignoring big plans to avoid delay and issues when exporting it to Excel*/
+--DECLARE @removed_plans INT = 0
+--DELETE FROM #tmpdm_exec_query_stats 
+--WHERE DATALENGTH(statement_plan) / 1024. > 2048 /*Ignoring big plans to avoid delay and issues when exporting it to Excel*/
 
-SET @removed_plans = @@ROWCOUNT
+--SET @removed_plans = @@ROWCOUNT
 
-SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to remove plans bigger than 2MB, removed ' + CONVERT(VARCHAR, ISNULL(@removed_plans, 0)) + ' plans.'
-RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+--SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to remove plans bigger than 2MB, removed ' + CONVERT(VARCHAR, ISNULL(@removed_plans, 0)) + ' plans.'
+--RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to collect data about last minute execution count.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
@@ -1386,7 +1413,7 @@ BEGIN
          END AS ''Index_was_never_used'',
          CONVERT(XML, ISNULL(REPLACE(REPLACE(REPLACE(
                                 (
-                                    SELECT c.name AS ''columnName''
+                                    SELECT QUOTENAME(c.name, ''"'') AS ''columnName''
                                     FROM sys.index_columns AS sic
                                         JOIN sys.columns AS c
                                             ON c.column_id = sic.column_id
@@ -1412,7 +1439,7 @@ BEGIN
          ISNULL(tab_index_key_column.keycolumndatatype, '''') AS key_column_data_type,
          CONVERT(XML, ISNULL(REPLACE(REPLACE(REPLACE(
                                 (
-                                    SELECT c.name AS ''columnName''
+                                    SELECT QUOTENAME(c.name, ''"'') AS ''columnName''
                                     FROM sys.index_columns AS sic
                                         JOIN sys.columns AS c
                                             ON c.column_id = sic.column_id
@@ -1597,6 +1624,7 @@ BEGIN
           SELECT COUNT(*) AS Cnt
           FROM sys.indexes i1
           WHERE i.object_id = i1.object_id
+          AND i1.index_id <> 0 /*ignoring heaps*/
       ) AS tNumerOfIndexes
       OUTER APPLY (SELECT all_columns.Name AS indexkeycolumnname, 
                            CASE 

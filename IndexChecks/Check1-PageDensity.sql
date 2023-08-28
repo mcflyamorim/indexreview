@@ -141,7 +141,7 @@ SELECT 'Check 1 - Check indexes with small number of rows per page' AS [Info],
        a.page_io_latch_wait_in_ms
   INTO tempdb.dbo.tmpIndexCheck1
   FROM tempdb.dbo.Tab_GetIndexInfo a
- WHERE a.in_row_data_page_count > 0
+ WHERE a.Number_Rows >= 100 /*Ignoring small tables*/
 
 SELECT * FROM tempdb.dbo.tmpIndexCheck1
 ORDER BY current_number_of_rows_table DESC, 
