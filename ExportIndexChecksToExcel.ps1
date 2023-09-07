@@ -435,21 +435,21 @@ try
 		Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
 
         $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -QueryTimeout 86400 <#24 hours#> -InputFile $TsqlFile -ErrorAction Stop
+		Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -QueryTimeout 65535 <#18 hours#> -InputFile $TsqlFile -ErrorAction Stop
 
         #Using -Verbose to capture SQL Server message output
 		if ($Database){
             $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -QueryTimeout 86400 <#24 hours#> -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -QueryTimeout 65535 <#18 hours#> -Verbose -ErrorAction Stop
         }
         else{
-            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -QueryTimeout 86400 <#24 hours#> -Verbose -ErrorAction Stop
+            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -QueryTimeout 65535 <#18 hours#> -Verbose -ErrorAction Stop
         }
         Write-Msg "Finished to run sp_GetIndexInfo"
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "tempdb" -Query "SELECT ISNULL(OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -QueryTimeout 86400 <#24 hours#> -ErrorAction Stop | Select-Object -ExpandProperty ObjID
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "tempdb" -Query "SELECT ISNULL(OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -QueryTimeout 65535 <#18 hours#> -ErrorAction Stop | Select-Object -ExpandProperty ObjID
 
 	if ($Result -eq 0) {
 		Write-Msg "Could not find table tempdb.dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
@@ -471,7 +471,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 65535 <#18 hours#> -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -627,8 +627,8 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 86400 <#24 hours#> `
+        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 65535 <#18 hours#> -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -QueryTimeout 65535 <#18 hours#> `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM tempdb.dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"
