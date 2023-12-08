@@ -558,7 +558,10 @@ AND qs.statement_start_offset = dm_exec_query_stats.statement_start_offset
 AND qs.statement_end_offset = dm_exec_query_stats.statement_end_offset
 
 /* Wait for 1 minute */
-WAITFOR DELAY '00:01:00.000'
+IF @@SERVERNAME NOT LIKE '%dellfabiano%'
+BEGIN
+  WAITFOR DELAY '00:01:00.000'
+END
 
 /* Update execution_count_last_minute with number of executions on last minute */
 UPDATE #tmpdm_exec_query_stats SET execution_count_last_minute = dm_exec_query_stats.execution_count - qs.execution_count_current
@@ -806,8 +809,8 @@ BEGIN
             @ctp AS cost_threshold_for_parallelism,
             CASE WHEN Batch.x.value('max(//p:RelOp/@Parallel)', 'float') > 0 THEN 1 ELSE 0 END AS is_parallel,
             Batch.x.exist('(//p:IndexScan[@ScanDirection="BACKWARD" and @Ordered="1"])') AS has_serial_ordered_backward_scan,
-            CONVERT(NUMERIC(25, 4), x.value('sum(..//p:QueryPlan/@CompileTime)', 'float') /1000. /1000.) AS compile_time_sec,
-            CONVERT(NUMERIC(25, 4), x.value('sum(..//p:QueryPlan/@CompileCPU)', 'float') /1000. /1000.) AS compile_cpu_sec,
+            CONVERT(NUMERIC(25, 4), x.value('sum(..//p:QueryPlan/@CompileTime)', 'float') /1000.) AS compile_time_sec,
+            CONVERT(NUMERIC(25, 4), x.value('sum(..//p:QueryPlan/@CompileCPU)', 'float') /1000.) AS compile_cpu_sec,
             CONVERT(NUMERIC(25, 4), x.value('sum(..//p:QueryPlan/@CompileMemory)', 'float') / 1024.) AS compile_memory_mb,
             CONVERT(NUMERIC(25, 4), Batch.x.value('sum(//p:MemoryGrantInfo/@SerialDesiredMemory)', 'float') / 1024.) AS serial_desired_memory_mb,
             CONVERT(NUMERIC(25, 4), Batch.x.value('sum(//p:MemoryGrantInfo/@SerialRequiredMemory)', 'float') / 1024.) AS serial_required_memory_mb,
@@ -1320,28 +1323,36 @@ BEGIN
     RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
 
     BEGIN TRY
-      INSERT INTO #tmpIndexFrag
-      SELECT
-        dm_db_index_physical_stats.database_id,
-        dm_db_index_physical_stats.object_id,
-        dm_db_index_physical_stats.index_id,
-        dm_db_index_physical_stats.avg_fragmentation_in_percent,
-        dm_db_index_physical_stats.fragment_count,
-        dm_db_index_physical_stats.avg_fragment_size_in_pages,
-        dm_db_index_physical_stats.page_count,
-        dm_db_index_physical_stats.avg_page_space_used_in_percent,
-        dm_db_index_physical_stats.record_count,
-        dm_db_index_physical_stats.ghost_record_count,
-        dm_db_index_physical_stats.min_record_size_in_bytes,
-        dm_db_index_physical_stats.max_record_size_in_bytes,
-        dm_db_index_physical_stats.avg_record_size_in_bytes,
-        dm_db_index_physical_stats.forwarded_record_count,
-        dm_db_index_physical_stats.compressed_page_count
-      FROM sys.dm_db_index_physical_stats(DB_ID(), @object_id, @index_id, NULL, CASE WHEN @size_gb >= 10.00 THEN ''LIMITED'' ELSE ''SAMPLED'' END)
-      WHERE dm_db_index_physical_stats.alloc_unit_type_desc = ''IN_ROW_DATA''
-      AND index_level = 0 /*leaf-level nodes only*/
-      AND partition_number = 1
-      OPTION (RECOMPILE);
+      IF @size_gb >= 5.00
+      BEGIN
+        SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Warning - Index is too big (>=10gb), skipping collection data about this table/index.''
+        RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
+      END
+      ELSE
+      BEGIN
+        INSERT INTO #tmpIndexFrag
+        SELECT
+          dm_db_index_physical_stats.database_id,
+          dm_db_index_physical_stats.object_id,
+          dm_db_index_physical_stats.index_id,
+          dm_db_index_physical_stats.avg_fragmentation_in_percent,
+          dm_db_index_physical_stats.fragment_count,
+          dm_db_index_physical_stats.avg_fragment_size_in_pages,
+          dm_db_index_physical_stats.page_count,
+          dm_db_index_physical_stats.avg_page_space_used_in_percent,
+          dm_db_index_physical_stats.record_count,
+          dm_db_index_physical_stats.ghost_record_count,
+          dm_db_index_physical_stats.min_record_size_in_bytes,
+          dm_db_index_physical_stats.max_record_size_in_bytes,
+          dm_db_index_physical_stats.avg_record_size_in_bytes,
+          dm_db_index_physical_stats.forwarded_record_count,
+          dm_db_index_physical_stats.compressed_page_count
+        FROM sys.dm_db_index_physical_stats(DB_ID(), @object_id, @index_id, NULL, CASE WHEN @size_gb >= 1.00 THEN ''LIMITED'' ELSE ''SAMPLED'' END)
+        WHERE dm_db_index_physical_stats.alloc_unit_type_desc = ''IN_ROW_DATA''
+        AND index_level = 0 /*leaf-level nodes only*/
+        AND partition_number = 1
+        OPTION (RECOMPILE);
+      END
     END TRY
     BEGIN CATCH
       SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error trying to run fragmentation index query... Timeout... Skipping collection data about this table/index.''

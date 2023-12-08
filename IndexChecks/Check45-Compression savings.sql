@@ -23,8 +23,9 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* Config params */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
-DECLARE @database_name_filter sysname = '' /*set to null to run script in all DBs*/;
+DECLARE @database_name_filter sysname = 'StackOverflow2010' /*set to null to run script in all DBs*/;
 DECLARE @min_rows BIGINT = 5000 /*Min of rows on table to be considered on estimation*/;
+DECLARE @min_mb   BIGINT = 10240 /*10GB*/ /*Min of MBs on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
 DECLARE @desired_compression NVARCHAR(500) = 'ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
@@ -153,7 +154,7 @@ FETCH NEXT FROM c_databases
 INTO @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Removing sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
   RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
 
   SET @sp_executesql = QUOTENAME(@Database_Name) + N'.sys.sp_executesql'
@@ -168,9 +169,11 @@ BEGIN
 
   BEGIN TRY
     EXECUTE @sp_executesql @stmt = @SQL
+    SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+    RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
   END TRY
   BEGIN CATCH
-    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2. '
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
     RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
 
@@ -2454,10 +2457,16 @@ END;
   '
   
   BEGIN TRY
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to create create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
+
     EXECUTE @sp_executesql @stmt = @SQL
+
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to create create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
   END TRY
   BEGIN CATCH
-    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to create sp_estimate_data_compression_savings_v2. '
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
     RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
 
@@ -2465,7 +2474,6 @@ END;
     INTO @Database_Name
     CONTINUE;
   END CATCH;
-
 
   SET @SQL = 
   '
@@ -2479,6 +2487,7 @@ DECLARE @schema_name      sysname,
         @i                INT          = 0,
         @table_count      INT,
         @min_row_count    BIGINT       = ' + CONVERT(VARCHAR(30), @min_rows) + ',
+        @min_mb           BIGINT       = ' + CONVERT(VARCHAR(30), @min_mb) + ',
         @table_name       sysname      = '''',
         @status_msg       VARCHAR(MAX) = '''',
         @cmd              VARCHAR(MAX) = '''';
@@ -2493,14 +2502,26 @@ END
 
 SELECT SCHEMA_NAME(tables.schema_id) AS schema_name,
        tables.name AS object_name,
-       (SELECT SUM(rows) FROM sys.partitions WHERE partitions.object_id = tables.object_id AND partitions.index_id <= 1) AS row_count
+       (SELECT SUM(rows) FROM sys.partitions WHERE partitions.object_id = tables.object_id AND partitions.index_id <= 1) AS row_count,
+       tSize.reserved_size_mb
 INTO #tmp_tables
 FROM sys.tables
+CROSS APPLY
+      (
+          SELECT CONVERT(DECIMAL(18, 2), SUM((st.reserved_page_count * 8) / 1024.)) reserved_size_mb
+          FROM sys.dm_db_partition_stats st
+          WHERE tables.object_id = st.object_id
+                AND st.partition_number = 1
+      ) AS tSize
 WHERE name = ISNULL(@table_name, name)
 
 SELECT @table_count = COUNT(*)
 FROM #tmp_tables
 WHERE row_count >= @min_row_count /*Ignoring small tables*/
+AND reserved_size_mb >= @min_mb /*Ignoring small tables*/
+
+SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Number of tables to process: '' + CONVERT(VARCHAR(30), @table_count);
+RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
 
 DECLARE cCompress CURSOR FAST_FORWARD READ_ONLY FOR
 SELECT schema_name,
@@ -2508,6 +2529,7 @@ SELECT schema_name,
        row_count
 FROM #tmp_tables
 WHERE row_count >= @min_row_count /*Ignoring small tables*/
+AND reserved_size_mb >= @min_mb /*Ignoring small tables*/
 ORDER BY row_count DESC;
 
 OPEN cCompress;
@@ -2555,10 +2577,16 @@ DEALLOCATE cCompress;
   '
 
   BEGIN TRY
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
+
     EXECUTE @sp_executesql @stmt = @SQL
+
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
   END TRY
   BEGIN CATCH
-    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to run sp_estimate_data_compression_savings_v2. '
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
     RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
 
@@ -2579,7 +2607,7 @@ DEALLOCATE cCompress;
     EXECUTE @sp_executesql @stmt = @SQL
   END TRY
   BEGIN CATCH
-    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2. '
+    SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
     RAISERROR(@statusMsg, 0, 0) WITH NOWAIT;
 
