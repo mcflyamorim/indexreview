@@ -23,7 +23,7 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* Config params */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
-DECLARE @database_name_filter sysname = 'StackOverflow2010' /*set to null to run script in all DBs*/;
+DECLARE @database_name_filter sysname = '' /*set to null to run script in all DBs*/;
 DECLARE @min_rows BIGINT = 5000 /*Min of rows on table to be considered on estimation*/;
 DECLARE @min_mb   BIGINT = 10240 /*10GB*/ /*Min of MBs on table to be considered on estimation*/;
 
@@ -38,10 +38,10 @@ DECLARE @compress_column_size BIGINT = 500 /*Min column size to be considered fo
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck45
 
-IF OBJECT_ID('tempdb.dbo.##TmpCompressionResult') IS NOT NULL
-  DROP TABLE ##TmpCompressionResult;
+IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
+  DROP TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult;
 
-CREATE TABLE ##TmpCompressionResult
+CREATE TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult
 (
   [database_name]                                      sysname,
   [object_name]                                        sysname,
@@ -2404,9 +2404,9 @@ BEGIN
   CLOSE [c];
   DEALLOCATE [c];
 
-  IF OBJECT_ID(''tempdb.dbo.##TmpCompressionResult'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.tmpIndexCheck45_CompressionResult'') IS NOT NULL
   BEGIN
-    INSERT INTO ##TmpCompressionResult
+    INSERT INTO tempdb.dbo.tmpIndexCheck45_CompressionResult
     SELECT *
     FROM [#estimated_results]
     WHERE estimated_data_compression IN (SELECT col_data_compression FROM #tmp_data_compression);
@@ -2632,7 +2632,7 @@ SELECT 'Check 45 - Estimate compression savings' AS [Info],
          ELSE 'ALTER INDEX "' + ISNULL(QUOTENAME([index_name]),'ALL') +'" ON "' + QUOTENAME([schema_name]) + '"."' + QUOTENAME([object_name]) + '" REBUILD WITH(DATA_COMPRESSION=' + estimated_data_compression + ', ONLINE=ON, DROP_EXISTING=ON)'
        END AS SqlToCompressHeap
 INTO tempdb.dbo.tmpIndexCheck45
-FROM ##TmpCompressionResult
+FROM tempdb.dbo.tmpIndexCheck45_CompressionResult
 
 SELECT tmpIndexCheck45.Info,
        tmpIndexCheck45.database_name,
