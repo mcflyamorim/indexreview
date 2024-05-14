@@ -1,4 +1,4 @@
-USE Northwind;
+USE master;
 GO
 IF NOT EXISTS (SELECT *
                FROM [INFORMATION_SCHEMA].[ROUTINES]
@@ -951,7 +951,6 @@ BEGIN
 			
 			-- set @create_current_index_ddl = @create_current_index_ddl + '')'';
 		 --end;
-
 		 --
 		 -- Compress the table/index with current compression.
 		 --
@@ -1010,13 +1009,14 @@ BEGIN
 
   set @drop_desired_index_ddl = ''drop index '' + quotename(@index_name) + '' on '' + quotename(@sample_table) + '';'';
 
+  -- always setting fill_factor to 100 to avoid useless work as I do not care about it when testing compression
 		set @create_desired_index_ddl = @create_desired_index_ddl
          + '' with (data_compression = ''
-									+ case @desired_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '');'';
+									+ case @desired_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '', fillfactor = 100);'';
 
 		set @create_current_index_ddl = @create_current_index_ddl
          + '' with (data_compression = ''
-									+ case @current_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '');'';
+									+ case @current_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '', fillfactor = 100);'';
 
   --if @index_type = 1 and @desired_compression not in(3, 4)
   --begin
@@ -1305,7 +1305,7 @@ BEGIN
     [estimation_status]                                  NVARCHAR(4000),
     [current_data_compression]                           NVARCHAR(60),
     [estimated_data_compression]                         NVARCHAR(60),
-    [compression_ratio]                                  BIGINT,
+    [compression_ratio]                                  NUMERIC(25, 2),
     [row_count]                                          BIGINT,
     [size_with_current_compression_setting(GB)]          NUMERIC(25, 2),
     [size_with_requested_compression_setting(GB)]        NUMERIC(25, 2),
@@ -1314,6 +1314,7 @@ BEGIN
     [size_with_requested_compression_setting(KB)]        BIGINT,
     [sample_size_with_current_compression_setting(KB)]   BIGINT,
     [sample_size_with_requested_compression_setting(KB)] BIGINT,
+    [sample_compressed_page_count]                       BIGINT,
     [sample_pages_with_current_compression_setting]      BIGINT,
     [sample_pages_with_requested_compression_setting]    BIGINT
   );
@@ -1387,7 +1388,8 @@ BEGIN
       0,
       0) WITH NOWAIT;
 
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to populate table sample - ' + @fqn + ('(partition_number = ' + CONVERT(VARCHAR(30), @curr_partition_number) + ')');
+
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to create the table sample #sample_tableDBA05385A6FF40F888204D05C7D56D2B.';
     RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
 
     -- Step 1. Create the sample table in current scope
@@ -1399,11 +1401,30 @@ BEGIN
 
     -- Step 2. Add columns into sample table
     -- 
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Adding columns to the table sample.';
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + @alter_ddl;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+
     EXEC (@alter_ddl);
 
     ALTER TABLE [#sample_tableDBA05385A6FF40F888204D05C7D56D2B] REBUILD;
 
-    EXEC (@table_option_ddl);
+    IF ISNULL(@table_option_ddl, '') <> ''
+    BEGIN
+      SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Executing table options to the table sample.';
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+      SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + @table_option_ddl;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+
+      EXEC (@table_option_ddl);
+    END
+
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to create the table sample #sample_tableDBA05385A6FF40F888204D05C7D56D2B.';
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to populate table sample - ' + @fqn + ('(partition_number = ' + CONVERT(VARCHAR(30), @curr_partition_number) + ')');
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
 
     DECLARE @sample_table_object_id INT = OBJECT_ID('tempdb.dbo.#sample_tableDBA05385A6FF40F888204D05C7D56D2B');
 
@@ -2120,32 +2141,34 @@ BEGIN
         [size_with_requested_compression_setting(KB)],
         [sample_size_with_current_compression_setting(KB)],
         [sample_size_with_requested_compression_setting(KB)],
+        [sample_compressed_page_count],
         [sample_pages_with_current_compression_setting],
         [sample_pages_with_requested_compression_setting]
       )
       VALUES
       (
-        DB_NAME(),                                                                                  -- database_name - sysname
-        @object_name,                                                                               -- object_name - sysname
-        @schema_name,                                                                               -- schema_name - sysname
-        @curr_index_id,                                                                             -- index_id - int
-        @index_name,                                                                                -- index_name - sysname
-        @curr_index_type_desc,                                                                      -- index_type_desc - NVARCHAR(60)
-        @curr_partition_number,                                                                     -- partition_number - int
-        @estimation_status,                                                                         -- estimation_status - nvarchar(4000)
-        @current_compression_desc,                                                                  -- current_data_compression - nvarchar(60)
-        @desired_compression_desc,                                                                  -- estimated_data_compression - nvarchar(60)
-        100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8))),                   -- compression_ratio - bigint
-        @row_count,                                                                                 -- row_count - bigint
-        (@current_size * 8) / 1024. / 1024.,                                                        -- size_with_current_compression_setting(GB) - numeric(25, 2)
-        (@estimated_compressed_size * 8) / 1024. / 1024.,                                           -- size_with_requested_compression_setting(GB) - numeric(25, 2)
-        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.), -- size_compression_saving(GB) - numeric(25, 2)
-        @current_size * 8,                                                                          -- size_with_current_compression_setting(KB) - bigint
-        @estimated_compressed_size * 8,                                                             -- size_with_requested_compression_setting(KB) - bigint
-        @sample_compressed_current * 8,                                                             -- sample_size_with_current_compression_setting(KB) - bigint
-        @sample_compressed_desired * 8,                                                             -- sample_size_with_requested_compression_setting(KB) - bigint
-        @current_size,                                                                              -- sample_pages_with_current_compression_setting - bigint
-        @estimated_compressed_size                                                                  -- sample_pages_with_requested_compression_setting - bigint
+        DB_NAME(),                                                                                         -- database_name - sysname
+        @object_name,                                                                                      -- object_name - sysname
+        @schema_name,                                                                                      -- schema_name - sysname
+        @curr_index_id,                                                                                    -- index_id - int
+        @index_name,                                                                                       -- index_name - sysname
+        @curr_index_type_desc,                                                                             -- index_type_desc - NVARCHAR(60)
+        @curr_partition_number,                                                                            -- partition_number - int
+        @estimation_status,                                                                                -- estimation_status - nvarchar(4000)
+        @current_compression_desc,                                                                         -- current_data_compression - nvarchar(60)
+        @desired_compression_desc,                                                                         -- estimated_data_compression - nvarchar(60)
+        CONVERT(NUMERIC(25, 2), 100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8)))), -- compression_ratio - numeric(25, 2)
+        @row_count,                                                                                        -- row_count - bigint
+        (@current_size * 8) / 1024. / 1024.,                                                               -- size_with_current_compression_setting(GB) - numeric(25, 2)
+        (@estimated_compressed_size * 8) / 1024. / 1024.,                                                  -- size_with_requested_compression_setting(GB) - numeric(25, 2)
+        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.),        -- size_compression_saving(GB) - numeric(25, 2)
+        @current_size * 8,                                                                                 -- size_with_current_compression_setting(KB) - bigint
+        @estimated_compressed_size * 8,                                                                    -- size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_current * 8,                                                                    -- sample_size_with_current_compression_setting(KB) - bigint
+        @sample_compressed_desired * 8,                                                                    -- sample_size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_desired,                                                                        -- sample_compressed_page_count bigint
+        @current_size,                                                                                     -- sample_pages_with_current_compression_setting - bigint
+        @estimated_compressed_size                                                                         -- sample_pages_with_requested_compression_setting - bigint
       );
 
       IF @estimated_compressed_size IS NOT NULL
@@ -2226,9 +2249,9 @@ BEGIN
   CLOSE [c];
   DEALLOCATE [c];
 
-  IF OBJECT_ID('tempdb.dbo.##TmpCompressionResult') IS NOT NULL
+  IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
   BEGIN
-    INSERT INTO ##TmpCompressionResult
+    INSERT INTO tempdb.dbo.tmpIndexCheck45_CompressionResult
     SELECT *
     FROM [#estimated_results]
     WHERE estimated_data_compression IN (SELECT col_data_compression FROM #tmp_data_compression);

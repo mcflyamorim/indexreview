@@ -8,7 +8,9 @@ GO
 ALTER PROC dbo.sp_GetIndexInfo
 (
   @database_name_filter NVARCHAR(200) = NULL, /* By default I'm collecting information about all DBs */
-  @refreshdata  BIT = 0 /* 1 to force drop/create of index tables, 0 will skip table creation if they already exists */
+  @refreshdata  BIT = 0, /* 1 to force drop/create of index tables, 0 will skip table creation if they already exists */
+  @skipcache    BIT = 0, /* use 1 skip plan cache collection*/
+  @skipfrag     BIT = 0  /* use 1 skip fragmentation collection*/
 )
 /*
 -------------------------------------------------------------------------------
@@ -92,6 +94,14 @@ BEGIN
   END
 END
 
+IF @skipfrag = 1
+BEGIN
+  IF OBJECT_ID('tempdb.dbo.#tmp_skipfrag') IS NOT NULL
+    DROP TABLE #tmp_skipfrag
+
+  CREATE TABLE #tmp_skipfrag (ID INT)
+END
+
 /* Clean up tables from a old execution */
 DECLARE @sql_old_table NVARCHAR(MAX)
 DECLARE @tmp_table_name NVARCHAR(MAX)
@@ -147,6 +157,11 @@ RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 /* Config params: */
 DECLARE @TOP BIGINT = 5000 /* By default, I'm only reading TOP 5k plans */
 
+IF @skipcache = 1
+BEGIN
+  SET @TOP = 0
+END
+
 IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats
   
@@ -170,6 +185,7 @@ AND NOT EXISTS(SELECT 1
                  FROM sys.dm_exec_cached_plans
                  WHERE dm_exec_cached_plans.plan_handle = dm_exec_query_stats.plan_handle
                  AND dm_exec_cached_plans.cacheobjtype = 'Compiled Plan Stub') /*Ignoring AdHoc - Plan Stub*/
+AND @skipcache = 0
 OPTION (RECOMPILE);
 
 IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
@@ -184,6 +200,7 @@ AND NOT EXISTS(SELECT 1
                  FROM sys.dm_exec_cached_plans
                  WHERE dm_exec_cached_plans.plan_handle = dm_exec_query_stats.plan_handle
                  AND dm_exec_cached_plans.cacheobjtype = 'Compiled Plan Stub') /*Ignoring AdHoc - Plan Stub*/
+AND @skipcache = 0
 OPTION (RECOMPILE);
 
 CREATE CLUSTERED INDEX ixquery_hash ON #tmpdm_exec_query_stats_indx(query_hash, last_execution_time)
@@ -558,7 +575,7 @@ AND qs.statement_start_offset = dm_exec_query_stats.statement_start_offset
 AND qs.statement_end_offset = dm_exec_query_stats.statement_end_offset
 
 /* Wait for 1 minute */
-IF @@SERVERNAME NOT LIKE '%dellfabiano%'
+IF (@@SERVERNAME NOT LIKE '%amorim%') AND (@@SERVERNAME NOT LIKE '%fabiano%')
 BEGIN
   WAITFOR DELAY '00:01:00.000'
 END
@@ -967,7 +984,7 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [Schema_Name] [sys].[sysname] NOT NULL,
   [Table_Name] [sys].[sysname] NOT NULL,
   [Index_Name] [sys].[sysname] NULL,
-  [File_Group] [sys].[sysname] NULL,
+  [File_Group] NVARCHAR(MAX) NULL,
   [Object_ID] INT,
   [Index_ID] INT,
   [Index_Type] [nvarchar] (60) NULL,
@@ -977,6 +994,9 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [reserved_page_count] [bigint] NULL,
   [used_page_count] [bigint] NULL,
   [in_row_data_page_count] [bigint] NULL,
+  [in_row_reserved_page_count] [bigint] NULL,
+  [lob_reserved_page_count] [bigint] NULL,
+  [row_overflow_reserved_page_count] [bigint] NULL,
   [Number_Of_Indexes_On_Table] [int] NULL,
   [avg_fragmentation_in_percent] NUMERIC(25,2) NULL,
   [fragment_count] [bigint] NULL,
@@ -1022,8 +1042,8 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [large_value_types_out_of_row] [bit] NULL,
   [is_tracked_by_cdc] [bit] NULL,
   [lock_escalation_desc] [nvarchar] (60) NULL,
-  [partition_number] [int] NOT NULL,
-  [data_compression_desc] [nvarchar] (60) NULL,
+  [partition_number] [nvarchar] (MAX) NOT NULL,
+  [data_compression_desc] [nvarchar] (MAX) NULL,
   [user_seeks] [bigint] NULL,
   [user_scans] [bigint] NULL,
   [user_lookups] [bigint] NULL,
@@ -1073,6 +1093,7 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
   [KeyCols_data_length_bytes] INT,
   Key_has_GUID INT,
   IsTablePartitioned BIT,
+  IsIndexPartitioned BIT,
   last_datetime_obj_was_used DATETIME,
   plan_cache_reference_count INT
 )
@@ -1258,11 +1279,79 @@ BEGIN
 
   CREATE CLUSTERED INDEX ix1 ON #tmp_dm_db_index_operational_stats (database_id, object_id, index_id)
 
-  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Collecting fragmentation index info...''
+  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Creating copy of system tables...''
+  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
+
+  /* Creating a copy of system tables because unindexed access to it can be very slow */
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_partitions'') IS NOT NULL
+      DROP TABLE #tmp_sys_partitions;
+  SELECT * INTO #tmp_sys_partitions FROM sys.partitions
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_partitions (object_id, index_id, partition_number)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
+      DROP TABLE #tmp_sys_dm_db_partition_stats;
+  SELECT * INTO #tmp_sys_dm_db_partition_stats FROM sys.dm_db_partition_stats
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_partition_stats (object_id, index_id, partition_number)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_allocation_units'') IS NOT NULL
+      DROP TABLE #tmp_sys_allocation_units;
+  SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_allocation_units (container_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_index_columns'') IS NOT NULL
+      DROP TABLE #tmp_sys_index_columns;
+  SELECT * INTO #tmp_sys_index_columns FROM sys.index_columns
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_index_columns (object_id, index_id, index_column_id, column_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_all_columns'') IS NOT NULL
+      DROP TABLE #tmp_sys_all_columns;
+  SELECT * INTO #tmp_sys_all_columns FROM sys.all_columns
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_all_columns (object_id, column_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_indexes'') IS NOT NULL
+      DROP TABLE #tmp_sys_indexes;
+  SELECT * INTO #tmp_sys_indexes FROM sys.indexes
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_indexes (object_id, index_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_tables'') IS NOT NULL
+      DROP TABLE #tmp_sys_tables;
+  SELECT * INTO #tmp_sys_tables FROM sys.tables
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_tables (object_id, schema_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_objects'') IS NOT NULL
+      DROP TABLE #tmp_sys_objects;
+  SELECT * INTO #tmp_sys_objects FROM sys.objects
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_objects (object_id, schema_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_schemas'') IS NOT NULL
+      DROP TABLE #tmp_sys_schemas;
+  SELECT * INTO #tmp_sys_schemas FROM sys.schemas
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_schemas (schema_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_types'') IS NOT NULL
+      DROP TABLE #tmp_sys_types;
+  SELECT * INTO #tmp_sys_types FROM sys.types
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_types (user_type_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_filegroups'') IS NOT NULL
+      DROP TABLE #tmp_sys_filegroups;
+  SELECT * INTO #tmp_sys_filegroups FROM sys.filegroups
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_filegroups (data_space_id)
+
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
+      DROP TABLE #tmp_sys_dm_db_missing_index_details;
+  SELECT * INTO #tmp_sys_dm_db_missing_index_details FROM sys.dm_db_missing_index_details
+  WHERE database_id = DB_ID()
+  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_missing_index_details (database_id, object_id)
+
+  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to create copy of system tables...''
+  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
+
+  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Collecting index fragmentation info...''
   RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
   SET LOCK_TIMEOUT 5000; /*5 seconds*/
-  DECLARE @objname sysname, @idxname sysname, @object_id INT, @index_id INT, @row_count VARCHAR(50), @tot INT, @i INT, @size_gb NUMERIC(25, 2)
+  DECLARE @objname sysname, @idxname sysname, @object_id INT, @index_id INT, @row_count VARCHAR(50), @tot INT, @i INT, @size_gb NUMERIC(36, 4)
 
   IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag'') IS NOT NULL
     DROP TABLE #tmpIndexFrag;
@@ -1289,19 +1378,33 @@ BEGIN
   IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag_Cursor'') IS NOT NULL
     DROP TABLE #tmpIndexFrag_Cursor;
 
-  SELECT objects.name AS objname, ISNULL(indexes.name, ''HEAP'') AS idxname, indexes.object_id, indexes.index_id, PARSENAME(CONVERT(VARCHAR(50), CONVERT(MONEY, dm_db_partition_stats.row_count), 1), 2) AS row_count,
-  CAST(ROUND(used_page_count * 8 / 1024.00 / 1024., 2) AS NUMERIC(36, 2)) AS size_gb
+  DECLARE @TOPFrag INT = 2147483647
+  IF OBJECT_ID(''tempdb.dbo.#tmp_skipfrag'') IS NOT NULL
+  BEGIN
+    SET @TOPFrag = 0
+  END
+
+  SELECT TOP (@TOPFrag)
+    objects.name AS objname, 
+    ISNULL(indexes.name, ''HEAP'') AS idxname, 
+    indexes.object_id, 
+    indexes.index_id, 
+    PARSENAME(CONVERT(VARCHAR(50), CONVERT(MONEY, SUM(dm_db_partition_stats.row_count)), 1), 2) AS row_count,
+    CAST(ROUND(SUM(used_page_count) * 8 / 1024.00 / 1024., 2) AS NUMERIC(36, 4)) AS size_gb
   INTO #tmpIndexFrag_Cursor
-  FROM sys.indexes
-  INNER JOIN sys.objects
+  FROM #tmp_sys_indexes AS indexes
+  INNER JOIN #tmp_sys_objects AS objects
   ON objects.object_id = indexes.object_id
-  INNER JOIN sys.dm_db_partition_stats
+  INNER JOIN #tmp_sys_dm_db_partition_stats AS dm_db_partition_stats
   ON dm_db_partition_stats.object_id = indexes.object_id
   AND dm_db_partition_stats.index_id = indexes.index_id
   WHERE objects.type = ''U''
   AND indexes.type not in (5, 6) /*ignoring columnstore indexes*/
-  AND dm_db_partition_stats.partition_number = 1
-  ORDER BY dm_db_partition_stats.used_page_count ASC
+  GROUP BY objects.name, 
+           ISNULL(indexes.name, ''HEAP''), 
+           indexes.object_id,
+           indexes.index_id
+  HAVING SUM(dm_db_partition_stats.row_count) > 0
 
   SET @tot = @@ROWCOUNT
 
@@ -1323,9 +1426,9 @@ BEGIN
     RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
 
     BEGIN TRY
-      IF @size_gb >= 5.00
+      IF @size_gb >= 5.0000
       BEGIN
-        SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Warning - Index is too big (>=10gb), skipping collection data about this table/index.''
+        SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Warning - Index is too big (>=5gb), skipping collection data about this table/index.''
         RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
       END
       ELSE
@@ -1335,27 +1438,28 @@ BEGIN
           dm_db_index_physical_stats.database_id,
           dm_db_index_physical_stats.object_id,
           dm_db_index_physical_stats.index_id,
-          dm_db_index_physical_stats.avg_fragmentation_in_percent,
-          dm_db_index_physical_stats.fragment_count,
-          dm_db_index_physical_stats.avg_fragment_size_in_pages,
-          dm_db_index_physical_stats.page_count,
-          dm_db_index_physical_stats.avg_page_space_used_in_percent,
-          dm_db_index_physical_stats.record_count,
-          dm_db_index_physical_stats.ghost_record_count,
-          dm_db_index_physical_stats.min_record_size_in_bytes,
-          dm_db_index_physical_stats.max_record_size_in_bytes,
-          dm_db_index_physical_stats.avg_record_size_in_bytes,
-          dm_db_index_physical_stats.forwarded_record_count,
-          dm_db_index_physical_stats.compressed_page_count
+          AVG(ISNULL(dm_db_index_physical_stats.avg_fragmentation_in_percent,0)) AS avg_fragmentation_in_percent,
+          SUM(ISNULL(dm_db_index_physical_stats.fragment_count,0)) AS fragment_count,
+          AVG(ISNULL(dm_db_index_physical_stats.avg_fragment_size_in_pages,0)) AS avg_fragment_size_in_pages,
+          SUM(ISNULL(dm_db_index_physical_stats.page_count,0)) AS page_count,
+          AVG(ISNULL(dm_db_index_physical_stats.avg_page_space_used_in_percent,0)) AS avg_page_space_used_in_percent,
+          SUM(ISNULL(dm_db_index_physical_stats.record_count,0)) AS record_count,
+          SUM(ISNULL(dm_db_index_physical_stats.ghost_record_count,0)) AS ghost_record_count,
+          MIN(ISNULL(dm_db_index_physical_stats.min_record_size_in_bytes,0)) AS min_record_size_in_bytes,
+          MAX(ISNULL(dm_db_index_physical_stats.max_record_size_in_bytes,0)) AS max_record_size_in_bytes,
+          AVG(ISNULL(dm_db_index_physical_stats.avg_record_size_in_bytes,0)) AS avg_record_size_in_bytes,
+          SUM(ISNULL(dm_db_index_physical_stats.forwarded_record_count,0)) AS forwarded_record_count,
+          SUM(ISNULL(dm_db_index_physical_stats.compressed_page_count,0)) AS compressed_page_count
         FROM sys.dm_db_index_physical_stats(DB_ID(), @object_id, @index_id, NULL, CASE WHEN @size_gb >= 1.00 THEN ''LIMITED'' ELSE ''SAMPLED'' END)
-        WHERE dm_db_index_physical_stats.alloc_unit_type_desc = ''IN_ROW_DATA''
-        AND index_level = 0 /*leaf-level nodes only*/
-        AND partition_number = 1
+        WHERE index_level = 0 /*leaf-level nodes only*/
+        GROUP BY dm_db_index_physical_stats.database_id,
+                 dm_db_index_physical_stats.object_id,
+                 dm_db_index_physical_stats.index_id
         OPTION (RECOMPILE);
       END
     END TRY
     BEGIN CATCH
-      SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error trying to run fragmentation index query... Timeout... Skipping collection data about this table/index.''
+      SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error trying to run index fragmentation query... Timeout... Skipping collection data about this table/index.''
       RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
     END CATCH
 
@@ -1365,16 +1469,8 @@ BEGIN
   CLOSE c_allrows
   DEALLOCATE c_allrows
 
-  /* Creating a copy of sys.partitions and sys.allocation_units because unindexed access to it can be very slow */
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_partitions'') IS NOT NULL
-      DROP TABLE #tmp_sys_partitions;
-  SELECT * INTO #tmp_sys_partitions FROM sys.partitions
-  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_partitions (object_id, index_id, partition_number)
-
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_allocation_units'') IS NOT NULL
-      DROP TABLE #tmp_sys_allocation_units;
-  SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units
-  CREATE CLUSTERED INDEX ix1 ON #tmp_sys_allocation_units (container_id)
+  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to collect index fragmentation info...''
+  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
   SELECT DB_ID() AS database_id,
          DB_NAME() AS ''Database_Name'',
@@ -1386,11 +1482,14 @@ BEGIN
          i.index_id,
          i.type_desc AS ''Index_Type'',
          ISNULL(t1.TableHasLOB, 0) AS TableHasLOB,
-         p.rows AS ''Number_Rows'',
+         tSize.row_count AS ''Number_Rows'',
          tSize.ReservedSizeInMB,
          tSize.reserved_page_count,
          tSize.used_page_count,
          tSize.in_row_data_page_count,
+         tSize.in_row_reserved_page_count,
+         tSize.lob_reserved_page_count,
+         tSize.row_overflow_reserved_page_count,
          tNumerOfIndexes.Cnt AS ''Number_Of_Indexes_On_Table'',
          #tmpIndexFrag.avg_fragmentation_in_percent,
          #tmpIndexFrag.fragment_count,
@@ -1425,8 +1524,8 @@ BEGIN
          CONVERT(XML, ISNULL(REPLACE(REPLACE(REPLACE(
                                 (
                                     SELECT QUOTENAME(c.name, ''"'') AS ''columnName''
-                                    FROM sys.index_columns AS sic
-                                        JOIN sys.columns AS c
+                                    FROM #tmp_sys_index_columns AS sic
+                                        JOIN #tmp_sys_all_columns AS c
                                             ON c.column_id = sic.column_id
                                                AND c.object_id = sic.object_id
                                     WHERE sic.object_id = i.object_id
@@ -1451,8 +1550,8 @@ BEGIN
          CONVERT(XML, ISNULL(REPLACE(REPLACE(REPLACE(
                                 (
                                     SELECT QUOTENAME(c.name, ''"'') AS ''columnName''
-                                    FROM sys.index_columns AS sic
-                                        JOIN sys.columns AS c
+                                    FROM #tmp_sys_index_columns AS sic
+                                        JOIN #tmp_sys_all_columns AS c
                                             ON c.column_id = sic.column_id
                                                AND c.object_id = sic.object_id
                                     WHERE sic.object_id = i.object_id
@@ -1492,8 +1591,8 @@ BEGIN
          t.large_value_types_out_of_row,
          t.is_tracked_by_cdc,
          t.lock_escalation_desc,
-         p.partition_number,
-         p.data_compression_desc,
+         ISNULL(p.partition_number, 1) AS partition_number,
+         ISNULL(p.data_compression_desc, '''') AS data_compression_desc,
          ius.user_seeks,
          ius.user_scans,
          ius.user_lookups,
@@ -1541,22 +1640,22 @@ BEGIN
          ios.tree_page_io_latch_wait_count,
          ios.tree_page_io_latch_wait_in_ms,
          (SELECT SUM(CASE sty.name WHEN ''nvarchar'' THEN sc.max_length/2 ELSE sc.max_length END) 
-          FROM sys.indexes AS ii
-		        INNER JOIN sys.tables AS tt ON tt.[object_id] = ii.[object_id]
-		        INNER JOIN sys.schemas ss ON ss.[schema_id] = tt.[schema_id]
-		        INNER JOIN sys.index_columns AS sic ON sic.object_id = tt.object_id AND sic.index_id = ii.index_id
-		        INNER JOIN sys.columns AS sc ON sc.object_id = tt.object_id AND sc.column_id = sic.column_id
-		        INNER JOIN sys.types AS sty ON sc.user_type_id = sty.user_type_id
+          FROM #tmp_sys_indexes AS ii
+		        INNER JOIN #tmp_sys_tables AS tt ON tt.[object_id] = ii.[object_id]
+		        INNER JOIN #tmp_sys_schemas ss ON ss.[schema_id] = tt.[schema_id]
+		        INNER JOIN #tmp_sys_index_columns AS sic ON sic.object_id = tt.object_id AND sic.index_id = ii.index_id
+		        INNER JOIN #tmp_sys_all_columns AS sc ON sc.object_id = tt.object_id AND sc.column_id = sic.column_id
+		        INNER JOIN #tmp_sys_types AS sty ON sc.user_type_id = sty.user_type_id
 		        WHERE ii.[object_id] = i.[object_id] 
             AND ii.index_id = i.index_id 
             AND sic.key_ordinal > 0) AS [KeyCols_data_length_bytes],
          (SELECT COUNT(sty.name) 
-            FROM sys.indexes AS ii
-		         INNER JOIN sys.tables AS tt ON tt.[object_id] = ii.[object_id]
-		         INNER JOIN sys.schemas ss ON ss.[schema_id] = tt.[schema_id]
-		         INNER JOIN sys.index_columns AS sic ON sic.object_id = i.object_id AND sic.index_id = i.index_id
-		         INNER JOIN sys.columns AS sc ON sc.object_id = tt.object_id AND sc.column_id = sic.column_id
-		         INNER JOIN sys.types AS sty ON sc.user_type_id = sty.user_type_id
+            FROM #tmp_sys_indexes AS ii
+		         INNER JOIN #tmp_sys_tables AS tt ON tt.[object_id] = ii.[object_id]
+		         INNER JOIN #tmp_sys_schemas ss ON ss.[schema_id] = tt.[schema_id]
+		         INNER JOIN #tmp_sys_index_columns AS sic ON sic.object_id = i.object_id AND sic.index_id = i.index_id
+		         INNER JOIN #tmp_sys_all_columns AS sc ON sc.object_id = tt.object_id AND sc.column_id = sic.column_id
+		         INNER JOIN #tmp_sys_types AS sty ON sc.user_type_id = sty.user_type_id
 		         WHERE i.[object_id] = ii.[object_id] 
            AND i.index_id = ii.index_id 
            AND sic.is_included_column = 0 
@@ -1569,40 +1668,80 @@ BEGIN
                           AND pp.index_id IN (0, 1)) THEN 1
            ELSE 0
          END AS IsTablePartitioned,
+         CASE 
+           WHEN EXISTS(SELECT *
+                         FROM #tmp_sys_partitions pp
+                        WHERE pp.partition_number > 1
+                          AND pp.object_id = i.object_Id
+                          AND pp.index_id = i.index_id) THEN 1
+           ELSE 0
+         END AS IsIndexPartitioned,
          TabIndexUsage.last_datetime_obj_was_used,
          0 AS plan_cache_reference_count
-  FROM sys.indexes i WITH (NOLOCK)
-      INNER JOIN sys.tables t
+  FROM #tmp_sys_indexes i WITH (NOLOCK)
+      INNER JOIN #tmp_sys_tables t
           ON t.object_id = i.object_id
-      INNER JOIN sys.schemas sc WITH (NOLOCK)
+      INNER JOIN #tmp_sys_schemas sc WITH (NOLOCK)
           ON sc.schema_id = t.schema_id
-      INNER JOIN #tmp_sys_partitions AS p
-          ON i.object_id = p.object_id
-             AND i.index_id = p.index_id
-             AND p.partition_number = 1
-      INNER JOIN #tmp_sys_allocation_units AS au
+      CROSS APPLY
+      (
+         SELECT STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number)
+                       FROM #tmp_sys_partitions
+                       WHERE #tmp_sys_partitions.object_id = i.object_id
+                       AND #tmp_sys_partitions.index_id = i.index_id
+                       ORDER BY #tmp_sys_partitions.partition_number
+                       FOR XML PATH('''')), 1, 1, ''''),
+                STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number) + ''('' + CONVERT(VARCHAR(200), #tmp_sys_partitions.data_compression_desc) + '')''
+                              FROM #tmp_sys_partitions
+                              WHERE #tmp_sys_partitions.object_id = i.object_id
+                              AND #tmp_sys_partitions.index_id = i.index_id
+                              ORDER BY #tmp_sys_partitions.partition_number
+                              FOR XML PATH('''')), 1, 1, '''')
+      ) AS p (partition_number, data_compression_desc)
+      OUTER APPLY(
+        SELECT SUM(bp.CacheSizeMB) AS CacheSizeMB,
+               SUM(bp.FreeSpaceMB) AS FreeSpaceMB
+        FROM #tmp_sys_partitions AS p
+        INNER JOIN #tmp_sys_allocation_units AS au
+            ON au.container_id = p.hobt_id
+        LEFT OUTER JOIN #tmpBufferDescriptors AS bp
+            ON bp.database_id = DB_ID()
+           AND bp.allocation_unit_id = au.allocation_unit_id
+        WHERE p.object_id = i.object_id
+        AND p.index_id = i.index_id
+      ) AS bp
+      CROSS APPLY (
+        SELECT STUFF((SELECT DISTINCT '','' + CONVERT(VARCHAR, p.partition_number) + ''('' + CONVERT(VARCHAR(200), au.type_desc COLLATE Latin1_General_Bin2) + '', '' + CONVERT(VARCHAR(200), fg.name COLLATE Latin1_General_Bin2) + '')''
+                               FROM #tmp_sys_partitions AS p
+          INNER JOIN #tmp_sys_allocation_units AS au
           ON au.container_id = p.hobt_id
-         AND au.type_desc = ''IN_ROW_DATA''
-      INNER JOIN sys.filegroups AS fg
+          INNER JOIN #tmp_sys_filegroups AS fg
           ON fg.data_space_id = au.data_space_id
+          WHERE p.object_id = i.object_id
+          AND p.index_id = i.index_id
+          FOR XML PATH('''')), 1, 1, '''')
+      ) AS fg (name)
       OUTER APPLY (SELECT TOP 1 
                           1 AS TableHasLOB
-                  FROM sys.tables
-                 INNER JOIN sys.all_columns
-                    ON all_columns.object_id = tables.object_id
-                  WHERE i.Object_ID = tables.object_id
-                    AND COLUMNPROPERTY(all_columns.object_id, all_columns.name, ''Precision'') = -1) as t1
+                          FROM #tmp_sys_partitions AS p
+                          INNER JOIN #tmp_sys_allocation_units AS au
+                          ON au.container_id = p.hobt_id
+                          WHERE p.object_id = i.object_id
+                          AND au.type = 2 /*Type of allocation unit: 2 = Large object (LOB) data (text, ntext, image, xml, large value types, and CLR user-defined types)*/
+      ) as t1
       CROSS APPLY
       (
           SELECT CONVERT(DECIMAL(18, 2), SUM((st.reserved_page_count * 8) / 1024.)) ReservedSizeInMB,
                  SUM(st.reserved_page_count) AS reserved_page_count,
                  SUM(st.used_page_count) AS used_page_count,
-                 SUM(st.in_row_data_page_count) AS in_row_data_page_count
-          FROM sys.dm_db_partition_stats st
+                 SUM(st.in_row_data_page_count) AS in_row_data_page_count,
+                 SUM(st.in_row_reserved_page_count) AS in_row_reserved_page_count,
+                 SUM(st.lob_reserved_page_count) AS lob_reserved_page_count,
+                 SUM(st.row_overflow_reserved_page_count) AS row_overflow_reserved_page_count,
+                 ISNULL(SUM(st.row_count), (SELECT SUM(p1.row_count) FROM #tmp_sys_dm_db_partition_stats as p1 WHERE i.object_id = p1.object_id AND p1.index_id <= 1)) AS row_count
+          FROM #tmp_sys_dm_db_partition_stats st
           WHERE i.object_id = st.object_id
                 AND i.index_id = st.index_id
-                AND p.partition_number = st.partition_number
-                AND st.partition_number = 1
       ) AS tSize
       LEFT OUTER JOIN #tmp_dm_db_index_usage_stats ius WITH (NOLOCK)
           ON ius.index_id = i.index_id
@@ -1612,9 +1751,6 @@ BEGIN
           ON ios.database_id = DB_ID()
          AND ios.object_id = i.object_id
          AND ios.index_id = i.index_id
-      LEFT OUTER JOIN #tmpBufferDescriptors AS bp
-          ON bp.database_id = DB_ID()
-         AND bp.allocation_unit_id = au.allocation_unit_id
       LEFT OUTER JOIN #tmpIndexFrag
           ON i.object_id = #tmpIndexFrag.object_id
              AND i.index_id = #tmpIndexFrag.index_id
@@ -1624,7 +1760,7 @@ BEGIN
           SELECT database_id,
                  object_id,
                  COUNT(*) AS Number_of_missing_index_plans_DMV
-          FROM sys.dm_db_missing_index_details
+          FROM #tmp_sys_dm_db_missing_index_details
           GROUP BY database_id,
                    object_id
       ) AS mid
@@ -1633,7 +1769,7 @@ BEGIN
       CROSS APPLY
       (
           SELECT COUNT(*) AS Cnt
-          FROM sys.indexes i1
+          FROM #tmp_sys_indexes i1
           WHERE i.object_id = i1.object_id
           AND i1.index_id <> 0 /*ignoring heaps*/
       ) AS tNumerOfIndexes
@@ -1648,11 +1784,11 @@ BEGIN
                            '', scale = '' +
                            ISNULL(CONVERT(VARCHAR(20), COLUMNPROPERTY(all_columns.object_id, all_columns.name, ''Scale'')), ''0'') + 
                            '')'' AS keycolumndatatype
-                   FROM sys.index_columns
-                   INNER JOIN sys.all_columns
+                   FROM #tmp_sys_index_columns AS index_columns
+                   INNER JOIN #tmp_sys_all_columns AS all_columns
                    ON all_columns.object_id = index_columns.object_id
                    AND all_columns.column_id = index_columns.column_id
-                   INNER JOIN sys.types
+                   INNER JOIN #tmp_sys_types AS types
                    ON types.user_type_id = all_columns.user_type_id
                    WHERE i.object_id = index_columns.object_id
                    AND i.index_id = index_columns.index_id
@@ -1679,6 +1815,9 @@ END
 CLOSE c_databases
 DEALLOCATE c_databases
 
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Updating plan_cache_reference_count column.'
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+
 UPDATE tempdb.dbo.Tab_GetIndexInfo 
 SET plan_cache_reference_count = (SELECT COUNT(DISTINCT query_hash) 
                                     FROM tempdb.dbo.tmpIndexCheckCachePlanData
@@ -1688,6 +1827,9 @@ CROSS APPLY (SELECT '(' + QUOTENAME(Database_Name) + '.' +
                           QUOTENAME(Schema_Name) + '.' + 
                           QUOTENAME(Table_Name) + 
                           ISNULL('.' + QUOTENAME(Index_Name),'') + ')') AS Tab1(Col1)
+
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to update plan_cache_reference_count column.'
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 CREATE UNIQUE CLUSTERED INDEX ix1 ON tempdb.dbo.Tab_GetIndexInfo(Database_ID, Object_ID, Index_ID)
 CREATE INDEX ix2 ON tempdb.dbo.Tab_GetIndexInfo(Database_Name, Schema_Name, Table_Name) INCLUDE(Index_ID, Number_Rows)

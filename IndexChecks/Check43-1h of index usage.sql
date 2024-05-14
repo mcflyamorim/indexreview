@@ -16,6 +16,14 @@ Quick recommendation:
 Review index usage
 
 Detailed recommendation:
+Watch out for indexes where the number of index read operations is much less than the number of index write (update) operations.
+As data changes, indexes must be updated, which requires CPU and IO resources and slows down DML statements. The resource overhead of updating indexes that have few reads may outweigh their benefit, if any. 
+This overhead is particularly noticeable when there are many indexes with low reads in the database, a phenomenon known as "over-indexed" databases.
+
+If the data in details is for a sufficiently long period during which all critical workloads have run, disable/drop these indexes. Then, monitor performance to validate that no significant negative impact has occurred. 
+If performance regression is unacceptable, recreate/rebuild some or all of the dropped indexes.
+
+Note: When running query workloads on readable secondary replicas, make sure you're also looking at the index usage data on readable replicas, as indexes may be required for that reason.
 */
 
 SET NOCOUNT ON; SET ARITHABORT OFF; SET ARITHIGNORE ON; 

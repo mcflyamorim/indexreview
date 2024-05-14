@@ -14,29 +14,55 @@ Recommendation:
 Quick recommendation:
 
 Detailed recommendation:
+
+ROW compression adds minimal CPU utilization while providing substantial storage and memory savings. For most workloads, ROW compression should be enabled by default for new tables and indexes.
+PAGE compression adds higher CPU utilization, but also provides higher storage and memory savings.
+
+Additional analysis and testing may be required to select data compression types optimally. 
+Any data compression requires additional CPU processing, thus testing is particularly important when low query latency must be maintained in transactional workloads.
+
+Notes: 
+
+- Writes_Ratio shows the ratio of update/modifications operations on a specific index relative to total operations on that object. 
+  The lower the ratio (that is, the table, index, or partition is infrequently updated), the better candidate it is for page compression.
+- Don't ignore compression for small objects, consider future growth when deciding what to compress. It is easier to compress a table while it is small than do it once it has become large.
+
 */
 
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't want to wait or cause other blocks*/
-
-/* Config params */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
-DECLARE @database_name_filter sysname = '' /*set to null to run script in all DBs*/;
-DECLARE @min_rows BIGINT = 5000 /*Min of rows on table to be considered on estimation*/;
-DECLARE @min_mb   BIGINT = 10240 /*10GB*/ /*Min of MBs on table to be considered on estimation*/;
+/* ------------------------------------ Config params --------------------------------------------- */
+/* ------------------------------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------------------------------ */
+DECLARE @database_name_filter SYSNAME = '' /*set to null to run script in all DBs*/;
+DECLARE @min_rows             BIGINT  = 1000 /*Min of rows on table to be considered on estimation*/;
+DECLARE @min_mb               BIGINT  = 250 /*250MB*/ /*Min of MBs on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
-DECLARE @desired_compression NVARCHAR(500) = 'ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
-DECLARE @max_mb_to_sample NUMERIC(25, 2) = 15 /*Max of MBs to read from source table to be used to populate the temporary object*/
-DECLARE @compress_column_size BIGINT = 500 /*Min column size to be considered for COMPRESS test*/
+--DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
+DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE' /*List of compression to be estimated*/;
+DECLARE @max_mb_to_sample     NUMERIC(25, 2) = 50 /*Max of MBs to read from source table to be used to populate the temporary object*/
+DECLARE @compress_column_size BIGINT         = 500 /*Min column size to be considered for COMPRESS test*/
+
+/* Parameters controlling the structure of output scripts: */
+DECLARE @online_rebuild	BIT	= 1	/* If 1, will generate REBUILD commands with the ONLINE option turned on */
+DECLARE @sort_in_tempdb	BIT	= 1	/* If 1, will generate REBUILD commands with the SORT_IN_TEMPDB option turned on. */
+DECLARE @max_dop				    INT	= NULL	/* If not NULL, will add a MaxDOP option accordingly. Set to 1 to prevent parallelism and reduce workload. */
+DECLARE @fill_factor				INT	= 100	/* If not NULL, will add a fill factor option accordingly. */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
-/* Config params */
+/* ------------------------------------ Config params --------------------------------------------- */
+/* ------------------------------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------------------------------ */
 
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck45
+
+IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
+  DROP TABLE #tmp1
 
 IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
   DROP TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult;
@@ -53,7 +79,7 @@ CREATE TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult
   [estimation_status]                                  NVARCHAR(4000),
   [current_data_compression]                           NVARCHAR(60),
   [estimated_data_compression]                         NVARCHAR(60),
-  [compression_ratio]                                  BIGINT,
+  [compression_ratio]                                  NUMERIC(25, 2),
   [row_count]                                          BIGINT,
   [size_with_current_compression_setting(GB)]          NUMERIC(25, 2),
   [size_with_requested_compression_setting(GB)]        NUMERIC(25, 2),
@@ -62,6 +88,7 @@ CREATE TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult
   [size_with_requested_compression_setting(KB)]        BIGINT,
   [sample_size_with_current_compression_setting(KB)]   BIGINT,
   [sample_size_with_requested_compression_setting(KB)] BIGINT,
+  [sample_compressed_page_count]                       BIGINT,
   [sample_pages_with_current_compression_setting]      BIGINT,
   [sample_pages_with_requested_compression_setting]    BIGINT
 );
@@ -1190,11 +1217,11 @@ BEGIN
 
 		set @create_desired_index_ddl = @create_desired_index_ddl
          + '''' with (data_compression = ''''
-									+ case @desired_compression when 0 then ''''none'''' when 1 then ''''row'''' when 2 then ''''page'''' when 3 then ''''columnstore'''' else ''''columnstore_archive'''' end + '''');'''';
+									+ case @desired_compression when 0 then ''''none'''' when 1 then ''''row'''' when 2 then ''''page'''' when 3 then ''''columnstore'''' else ''''columnstore_archive'''' end + '''', fillfactor = 100);'''';
 
 		set @create_current_index_ddl = @create_current_index_ddl
          + '''' with (data_compression = ''''
-									+ case @current_compression when 0 then ''''none'''' when 1 then ''''row'''' when 2 then ''''page'''' when 3 then ''''columnstore'''' else ''''columnstore_archive'''' end + '''');'''';
+									+ case @current_compression when 0 then ''''none'''' when 1 then ''''row'''' when 2 then ''''page'''' when 3 then ''''columnstore'''' else ''''columnstore_archive'''' end + '''', fillfactor = 100);'''';
 
   --if @index_type = 1 and @desired_compression not in(3, 4)
   --begin
@@ -1483,7 +1510,7 @@ BEGIN
     [estimation_status]                                  NVARCHAR(4000),
     [current_data_compression]                           NVARCHAR(60),
     [estimated_data_compression]                         NVARCHAR(60),
-    [compression_ratio]                                  BIGINT,
+    [compression_ratio]                                  NUMERIC(25, 2),
     [row_count]                                          BIGINT,
     [size_with_current_compression_setting(GB)]          NUMERIC(25, 2),
     [size_with_requested_compression_setting(GB)]        NUMERIC(25, 2),
@@ -1492,6 +1519,7 @@ BEGIN
     [size_with_requested_compression_setting(KB)]        BIGINT,
     [sample_size_with_current_compression_setting(KB)]   BIGINT,
     [sample_size_with_requested_compression_setting(KB)] BIGINT,
+    [sample_compressed_page_count]                       BIGINT,
     [sample_pages_with_current_compression_setting]      BIGINT,
     [sample_pages_with_requested_compression_setting]    BIGINT
   );
@@ -2298,32 +2326,34 @@ BEGIN
         [size_with_requested_compression_setting(KB)],
         [sample_size_with_current_compression_setting(KB)],
         [sample_size_with_requested_compression_setting(KB)],
+        [sample_compressed_page_count],
         [sample_pages_with_current_compression_setting],
         [sample_pages_with_requested_compression_setting]
       )
       VALUES
       (
-        DB_NAME(),                                                                                  -- database_name - sysname
-        @object_name,                                                                               -- object_name - sysname
-        @schema_name,                                                                               -- schema_name - sysname
-        @curr_index_id,                                                                             -- index_id - int
-        @index_name,                                                                                -- index_name - sysname
-        @curr_index_type_desc,                                                                      -- index_type_desc - NVARCHAR(60)
-        @curr_partition_number,                                                                     -- partition_number - int
-        @estimation_status,                                                                         -- estimation_status - nvarchar(4000)
-        @current_compression_desc,                                                                  -- current_data_compression - nvarchar(60)
-        @desired_compression_desc,                                                                  -- estimated_data_compression - nvarchar(60)
-        100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8))),                   -- compression_ratio - bigint
-        @row_count,                                                                                 -- row_count - bigint
-        (@current_size * 8) / 1024. / 1024.,                                                        -- size_with_current_compression_setting(GB) - numeric(25, 2)
-        (@estimated_compressed_size * 8) / 1024. / 1024.,                                           -- size_with_requested_compression_setting(GB) - numeric(25, 2)
-        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.), -- size_compression_saving(GB) - numeric(25, 2)
-        @current_size * 8,                                                                          -- size_with_current_compression_setting(KB) - bigint
-        @estimated_compressed_size * 8,                                                             -- size_with_requested_compression_setting(KB) - bigint
-        @sample_compressed_current * 8,                                                             -- sample_size_with_current_compression_setting(KB) - bigint
-        @sample_compressed_desired * 8,                                                             -- sample_size_with_requested_compression_setting(KB) - bigint
-        @current_size,                                                                              -- sample_pages_with_current_compression_setting - bigint
-        @estimated_compressed_size                                                                  -- sample_pages_with_requested_compression_setting - bigint
+        DB_NAME(),                                                                                          -- database_name - sysname
+        @object_name,                                                                                       -- object_name - sysname
+        @schema_name,                                                                                       -- schema_name - sysname
+        @curr_index_id,                                                                                     -- index_id - int
+        @index_name,                                                                                        -- index_name - sysname
+        @curr_index_type_desc,                                                                              -- index_type_desc - NVARCHAR(60)
+        @curr_partition_number,                                                                             -- partition_number - int
+        @estimation_status,                                                                                 -- estimation_status - nvarchar(4000)
+        @current_compression_desc,                                                                          -- current_data_compression - nvarchar(60)
+        @desired_compression_desc,                                                                          -- estimated_data_compression - nvarchar(60)
+        CONVERT(NUMERIC(25, 2), 100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8)))),  -- compression_ratio - numeric(25, 2)
+        @row_count,                                                                                         -- row_count - bigint
+        (@current_size * 8) / 1024. / 1024.,                                                                -- size_with_current_compression_setting(GB) - numeric(25, 2)
+        (@estimated_compressed_size * 8) / 1024. / 1024.,                                                   -- size_with_requested_compression_setting(GB) - numeric(25, 2)
+        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.),         -- size_compression_saving(GB) - numeric(25, 2)
+        @current_size * 8,                                                                                  -- size_with_current_compression_setting(KB) - bigint
+        @estimated_compressed_size * 8,                                                                     -- size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_current * 8,                                                                     -- sample_size_with_current_compression_setting(KB) - bigint
+        @sample_compressed_desired * 8,                                                                     -- sample_size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_desired,                                                                         -- sample_compressed_page_count bigint
+        @current_size,                                                                                      -- sample_pages_with_current_compression_setting - bigint
+        @estimated_compressed_size                                                                          -- sample_pages_with_requested_compression_setting - bigint
       );
 
       IF @estimated_compressed_size IS NOT NULL
@@ -2511,7 +2541,6 @@ CROSS APPLY
           SELECT CONVERT(DECIMAL(18, 2), SUM((st.reserved_page_count * 8) / 1024.)) reserved_size_mb
           FROM sys.dm_db_partition_stats st
           WHERE tables.object_id = st.object_id
-                AND st.partition_number = 1
       ) AS tSize
 WHERE name = ISNULL(@table_name, name)
 
@@ -2625,63 +2654,103 @@ DEALLOCATE c_databases
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run script.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-SELECT 'Check 45 - Estimate compression savings' AS [Info],
-       *,
-       CASE index_type_desc 
-         WHEN 'HEAP' THEN 'ALTER TABLE "' + QUOTENAME([schema_name]) + '"."' + QUOTENAME([object_name]) + '" REBUILD WITH(DATA_COMPRESSION=' + estimated_data_compression + ', ONLINE=ON)' 
-         ELSE 'ALTER INDEX "' + ISNULL(QUOTENAME([index_name]),'ALL') +'" ON "' + QUOTENAME([schema_name]) + '"."' + QUOTENAME([object_name]) + '" REBUILD WITH(DATA_COMPRESSION=' + estimated_data_compression + ', ONLINE=ON, DROP_EXISTING=ON)'
-       END AS SqlToCompressHeap
-INTO tempdb.dbo.tmpIndexCheck45
-FROM tempdb.dbo.tmpIndexCheck45_CompressionResult
+DECLARE @rebuild_options VARCHAR(MAX) = ''
+SET @rebuild_options = @rebuild_options + ', PAD_INDEX = ON'
 
-SELECT tmpIndexCheck45.Info,
-       tmpIndexCheck45.database_name,
-       tmpIndexCheck45.object_name,
-       tmpIndexCheck45.schema_name,
-       tmpIndexCheck45.index_id,
-       tmpIndexCheck45.index_name,
-       tmpIndexCheck45.index_type_desc,
-       tmpIndexCheck45.partition_number,
-       tmpIndexCheck45.estimation_status,
-       tmpIndexCheck45.current_data_compression,
-       tmpIndexCheck45.estimated_data_compression,
-       tmpIndexCheck45.compression_ratio,
-       tmpIndexCheck45.[size_with_current_compression_setting(GB)],
-       tmpIndexCheck45.[size_with_requested_compression_setting(GB)],
-       tmpIndexCheck45.[size_compression_saving(GB)],
-       tmpIndexCheck45.row_count AS current_number_of_rows_table,
+IF @online_rebuild = 1 
+  SET @rebuild_options = @rebuild_options + ', ONLINE = ON'
+IF @sort_in_tempdb = 1  
+  SET @rebuild_options = @rebuild_options + ', SORT_IN_TEMPDB = ON'
+IF @max_dop IS NOT NULL 
+  SET @rebuild_options = @rebuild_options + ', MAXDOP = ' + CONVERT(VARCHAR, @max_dop)
+IF @fill_factor IS NOT NULL 
+  SET @rebuild_options = @rebuild_options + ', FILLFACTOR = ' + CONVERT(VARCHAR, @fill_factor)
+
+IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
+  DROP TABLE #tmp1
+
+SELECT 'Check 45 - Estimate compression savings' AS Info,
+       t1.database_name,
+       t1.object_name,
+       t1.schema_name,
+       t1.index_id,
+       t1.index_name,
+       t1.index_type_desc,
+       t1.partition_number,
+       t1.estimation_status,
+       t1.current_data_compression,
+       t1.estimated_data_compression,
+       t1.compression_ratio,
+       t1.[size_with_current_compression_setting(GB)],
+       t1.[size_with_requested_compression_setting(GB)],
+       t1.[size_compression_saving(GB)],
+       t1.row_count AS current_number_of_rows_table,
+       CONVERT(BIGINT, t1.row_count / t1.sample_compressed_page_count) AS avg_rows_per_page,
        ISNULL(a.user_seeks + a.user_scans + a.user_lookups + a.user_updates, 0) AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        ISNULL(tab3.avg_of_access_per_minute_based_on_index_usage_dmv, 0) AS avg_of_access_per_minute_based_on_index_usage_dmv,
        ISNULL(a.user_seeks, 0) AS user_seeks,
        ISNULL(a.user_scans, 0) AS user_scans,
+       ISNULL(Tab6.Scans_Ratio, 0) AS user_scans_ratio,
        ISNULL(a.user_lookups, 0) AS user_lookups,
        ISNULL(a.user_updates, 0) AS user_updates,
        ISNULL(Number_of_Reads,0) AS number_of_reads, 
        ISNULL(Tab1.[Reads_Ratio], 0) AS reads_ratio,
-       ISNULL([Total Writes], 0) AS number_of_writes,	      
+       ISNULL([Total Writes], 0) AS number_of_writes,
        ISNULL(Tab2.[Writes_Ratio], 0) AS writes_ratio,
        ISNULL(a.singleton_lookup_count, 0) AS singleton_lookup_count,
        ISNULL(Tab4.singleton_lookup_ratio, 0) AS singleton_lookup_ratio,
        ISNULL(a.range_scan_count, 0) AS range_scan_count,
        ISNULL(Tab5.range_scan_ratio, 0) AS range_scan_ratio,
+       a.page_io_latch_wait_count,
+       CAST(1. * a.page_io_latch_wait_in_ms / NULLIF(a.page_io_latch_wait_count ,0) AS DECIMAL(12,2)) AS page_io_latch_avg_wait_ms,
+       a.page_io_latch_wait_in_ms AS total_page_io_latch_wait_in_ms,
+       CONVERT(VARCHAR(200), ((page_io_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_io_latch_wait_in_ms) / 1000), 0), 108) AS total_page_io_latch_wait_d_h_m_s,
        a.last_datetime_obj_was_used,
        ISNULL(a.plan_cache_reference_count, 0) AS plan_cache_reference_count,
+       a.fill_factor,
        ISNULL(a.Buffer_Pool_SpaceUsed_MB, 0) AS buffer_pool_spaceused_mb,
        ISNULL(a.Buffer_Pool_FreeSpace_MB, 0) AS buffer_pool_freespace_mb,
        CONVERT(NUMERIC(18, 2), (a.Buffer_Pool_FreeSpace_MB / CASE WHEN a.Buffer_Pool_SpaceUsed_MB = 0 THEN 1 ELSE a.Buffer_Pool_SpaceUsed_MB END) * 100) AS Buffer_Pool_FreeSpace_Percent,
-       tmpIndexCheck45.[size_with_current_compression_setting(KB)],
-       tmpIndexCheck45.[size_with_requested_compression_setting(KB)],
-       tmpIndexCheck45.[sample_size_with_current_compression_setting(KB)],
-       tmpIndexCheck45.[sample_size_with_requested_compression_setting(KB)],
-       tmpIndexCheck45.sample_pages_with_current_compression_setting,
-       tmpIndexCheck45.sample_pages_with_requested_compression_setting,
-       tmpIndexCheck45.SqlToCompressHeap
-FROM tempdb.dbo.tmpIndexCheck45
+       CONVERT(NUMERIC(25, 2), (a.in_row_reserved_page_count * 8) / 1024.) AS in_row_reserved_mb,
+       CONVERT(NUMERIC(25, 2), (a.lob_reserved_page_count * 8) / 1024.) AS lob_reserved_mb,
+       CONVERT(NUMERIC(25, 2), (a.row_overflow_reserved_page_count * 8) / 1024.) AS row_overflow_reserved_mb,
+       a.large_value_types_out_of_row,
+       t1.[size_with_current_compression_setting(KB)],
+       t1.[size_with_requested_compression_setting(KB)],
+       t1.[sample_size_with_current_compression_setting(KB)],
+       t1.[sample_size_with_requested_compression_setting(KB)],
+       t1.[sample_compressed_page_count],
+       t1.sample_pages_with_current_compression_setting,
+       t1.sample_pages_with_requested_compression_setting,
+       CASE index_type_desc 
+         WHEN 'HEAP' THEN
+           CASE 
+             WHEN estimated_data_compression IN ('ROW', 'PAGE', 'NONE')
+               THEN 
+                 'IF NOT EXISTS(SELECT * FROM ' + QUOTENAME(t1.[database_name]) + '.sys.partitions WHERE partitions.object_id = OBJECT_ID(''' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ''') AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + ' AND data_compression_desc = ''' + CONVERT(VARCHAR(200), t1.estimated_data_compression) + ''')' + NCHAR(13) + NCHAR(10) + 
+                 'BEGIN' + + NCHAR(13) + NCHAR(10) +
+                 '  ALTER TABLE ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD WITH(DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')' + NCHAR(13) + NCHAR(10) + 
+                 'END;'
+             ELSE ''
+           END
+         ELSE 
+           CASE 
+             WHEN estimated_data_compression IN ('ROW', 'PAGE', 'NONE')
+               THEN 
+                 'IF NOT EXISTS(SELECT * FROM ' + QUOTENAME(t1.[database_name]) + '.sys.partitions WHERE partitions.object_id = OBJECT_ID(''' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ''') AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + ' AND data_compression_desc = ''' + CONVERT(VARCHAR(200), t1.estimated_data_compression) + ''')' + NCHAR(13) + NCHAR(10) + 
+                 'BEGIN' + + NCHAR(13) + NCHAR(10) +
+                 '  ALTER INDEX ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') +' ON ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD PARTITION = ' + CASE WHEN a.IsIndexPartitioned = 1 THEN CONVERT(VARCHAR(30), t1.partition_number) ELSE 'ALL' END + ' WITH(DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')' + NCHAR(13) + NCHAR(10) + 
+                 'END;'
+             ELSE ''
+           END
+       END AS SqlToCompress
+INTO #tmp1
+FROM tempdb.dbo.tmpIndexCheck45_CompressionResult AS t1
 LEFT OUTER JOIN tempdb.dbo.Tab_GetIndexInfo a
-ON a.Database_Name = tmpIndexCheck45.database_name
-AND a.Schema_Name = tmpIndexCheck45.schema_name
-AND a.Table_Name = tmpIndexCheck45.object_name
-AND a.Index_ID = tmpIndexCheck45.index_id
+ON a.Database_Name = t1.database_name
+AND a.Schema_Name = t1.schema_name
+AND a.Table_Name = t1.object_name
+AND a.Index_ID = t1.index_id
 OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (a.user_seeks + a.user_scans + a.user_lookups) = 0 THEN 0 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups)) * 100 /
               		    CASE (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates)) END END AS DECIMAL(18,2))),0)) AS Tab1([Reads_Ratio])
 OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN a.user_updates = 0 THEN 0 ELSE CONVERT(REAL, a.user_updates) * 100 /
@@ -2695,17 +2764,236 @@ OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (singleton_look
               		    CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab4(singleton_lookup_ratio)
 OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN range_scan_count = 0 THEN 0 ELSE CONVERT(REAL, range_scan_count) * 100 /
 		                  CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab5(range_scan_ratio)
-ORDER BY tmpIndexCheck45.database_name,
-         tmpIndexCheck45.row_count DESC,
-         tmpIndexCheck45.schema_name,
-         tmpIndexCheck45.object_name,
-         tmpIndexCheck45.index_id,
-         tmpIndexCheck45.partition_number,
-         CASE tmpIndexCheck45.estimated_data_compression
-           WHEN 'NONE' THEN 0
-           WHEN 'ROW' THEN 1
-           WHEN 'PAGE' THEN 2
-           WHEN 'COLUMNSTORE' THEN 3
-           WHEN 'COLUMNSTORE_ARCHIVE' THEN 4
-           WHEN 'COMPRESS' THEN 5
-         END;
+OUTER APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (a.user_scans) = 0 THEN 0 ELSE CONVERT(REAL, (a.user_scans)) * 100 /
+              		    CASE (a.user_seeks + a.user_scans + a.user_lookups) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups)) END END AS DECIMAL(18,2))),0)) AS Tab6(Scans_Ratio)
+
+CREATE CLUSTERED INDEX ix1 ON #tmp1(database_name, object_name, schema_name, index_name, partition_number)
+
+SELECT 
+#tmp1.*,
+t1.none_compression_ratio,
+t1.row_compression_ratio,
+t1.page_compression_ratio,
+t1.columstore_compression_ratio,
+t1.columstore_archive_compression_ratio,
+t1.compress_compression_ratio
+INTO tempdb.dbo.tmpIndexCheck45
+FROM #tmp1
+CROSS APPLY (
+  SELECT SUM(CASE WHEN a.estimated_data_compression = 'NONE' THEN a.compression_ratio END) AS none_compression_ratio,
+         SUM(CASE WHEN a.estimated_data_compression = 'ROW' THEN a.compression_ratio END) AS row_compression_ratio,
+         SUM(CASE WHEN a.estimated_data_compression = 'PAGE' THEN a.compression_ratio END) AS page_compression_ratio,
+         SUM(CASE WHEN a.estimated_data_compression = 'COLUMNSTORE' THEN a.compression_ratio END) AS columstore_compression_ratio,
+         SUM(CASE WHEN a.estimated_data_compression = 'COLUMNSTORE_ARCHIVE' THEN a.compression_ratio END) AS columstore_archive_compression_ratio,
+         SUM(CASE WHEN a.estimated_data_compression = 'COMPRESS' THEN a.compression_ratio END) AS compress_compression_ratio
+  FROM #tmp1 AS a
+  WHERE a.database_name = #tmp1.database_name
+  AND a.schema_name = #tmp1.schema_name
+  AND a.object_name = #tmp1.object_name
+  AND a.index_name = #tmp1.index_name
+  AND a.partition_number = #tmp1.partition_number
+) AS t1
+GO
+
+ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD CompressionOrderWeight INT NOT NULL DEFAULT 0
+ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD CompressionOrder INT NOT NULL DEFAULT 0
+ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD IsRecommendedAlgorithm INT NOT NULL DEFAULT 0
+GO
+
+/* Define initial order based on buffer pool usage, index size and compression ratio. */
+
+; WITH CTE_1
+AS
+(
+  SELECT CompressionOrder, 
+         ROW_NUMBER() OVER(ORDER BY tmpIndexCheck45.database_name,
+                                    tmpIndexCheck45.current_number_of_rows_table DESC,
+                                    tmpIndexCheck45.schema_name,
+                                    tmpIndexCheck45.object_name,
+                                    tmpIndexCheck45.index_id,
+                                    tmpIndexCheck45.partition_number,
+                                    CASE tmpIndexCheck45.estimated_data_compression
+                                      WHEN 'NONE' THEN 0
+                                      WHEN 'ROW' THEN 1
+                                      WHEN 'PAGE' THEN 2
+                                      WHEN 'COLUMNSTORE' THEN 3
+                                      WHEN 'COLUMNSTORE_ARCHIVE' THEN 4
+                                      WHEN 'COMPRESS' THEN 5
+                                    END) AS rn
+FROM tempdb.dbo.tmpIndexCheck45
+)
+UPDATE CTE_1 SET CompressionOrder = rn
+GO
+
+/* If index is already compressed and 
+   NONE compression ratio is >= -3 and <= 3%, 
+   then set preferable compression algorithm to NONE,
+   as it is probably better to leave it as NONE to avoid
+   extra overhead for a little gain */
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+WHERE current_data_compression <> 'NONE'
+AND estimated_data_compression = 'NONE'
+AND compression_ratio BETWEEN -3 AND 3
+AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+               WHERE a.database_name = tmpIndexCheck45.database_name
+               AND a.object_name = tmpIndexCheck45.object_name
+               AND a.schema_name = tmpIndexCheck45.schema_name
+               AND a.index_name = tmpIndexCheck45.index_name
+               AND a.estimated_data_compression <> 'NONE'
+               AND a.IsRecommendedAlgorithm = 1)
+
+/* If index is already compressed with PAGE and 
+   ROW compression ratio is >= -3 and <= 3%, 
+   then set preferable compression algorithm to ROW,
+   as it is probably better to leave it as ROW to avoid
+   extra overhead for a little gain compared to PAGE */
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+WHERE current_data_compression = 'PAGE'
+AND estimated_data_compression = 'ROW'
+AND compression_ratio BETWEEN -3 AND 3
+AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+               WHERE a.database_name = tmpIndexCheck45.database_name
+               AND a.object_name = tmpIndexCheck45.object_name
+               AND a.schema_name = tmpIndexCheck45.schema_name
+               AND a.index_name = tmpIndexCheck45.index_name
+               AND a.estimated_data_compression <> 'ROW'
+               AND a.IsRecommendedAlgorithm = 1)
+
+/* If row compression ratio is >= 10% and ratio difference 
+   from ROW to PAGE is less than 10%, then set preferable 
+   compression algorithm to ROW */
+DECLARE @DiffToPreferRow INT = 10
+DECLARE @MinRowCompressionRatio INT = 10
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+WHERE estimated_data_compression = 'ROW'
+AND page_compression_ratio - row_compression_ratio <= @DiffToPreferRow
+AND IsRecommendedAlgorithm = 0
+AND compression_ratio >= @MinRowCompressionRatio
+AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+               WHERE a.database_name = tmpIndexCheck45.database_name
+               AND a.object_name = tmpIndexCheck45.object_name
+               AND a.schema_name = tmpIndexCheck45.schema_name
+               AND a.index_name = tmpIndexCheck45.index_name
+               AND a.estimated_data_compression <> 'ROW'
+               AND a.IsRecommendedAlgorithm = 1)
+
+/* If page compression ratio is >= 25% then
+   set preferable compression algorithm to PAGE */
+DECLARE @MinPageCompressionRatio INT = 25
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+WHERE estimated_data_compression = 'PAGE'
+AND compression_ratio >= @MinPageCompressionRatio
+AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+               WHERE a.database_name = tmpIndexCheck45.database_name
+               AND a.object_name = tmpIndexCheck45.object_name
+               AND a.schema_name = tmpIndexCheck45.schema_name
+               AND a.index_name = tmpIndexCheck45.index_name
+               AND a.estimated_data_compression <> 'PAGE'
+               AND a.IsRecommendedAlgorithm = 1)
+
+/* An index >= 5% of total buffer pool data cache size (since "big" can vary on each environment, I'm using BP as a measure to help answer this.) 
+   is considered a big table, will gain a extra weight on final formula.
+   The idea is to favor compression on big tables. */
+DECLARE @PercentOfMemoryToIdentifyBigTables INT = 5
+
+;WITH CTE_1
+AS
+(
+SELECT * FROM tempdb.dbo.tmpIndexCheck45
+WHERE ([size_with_current_compression_setting(KB)] / 1024.) >= (SELECT (CONVERT(NUMERIC(18, 2), SUM(pages_kb) / 1024.)  * @PercentOfMemoryToIdentifyBigTables) / 100  AS PercentOfBpSizeMB
+                                                                FROM sys.dm_os_memory_clerks
+                                                                WHERE [type] = 'MEMORYCLERK_SQLBUFFERPOOL')
+)
+UPDATE CTE_1 SET CompressionOrderWeight = CompressionOrderWeight + 1
+
+/* Indexes with a high percent (default of 40%) of reads compared to writes will get an extra weight on final formula.
+   The idea is to favor compression on tables with a high number of reads compared to writes. */
+DECLARE @HighPercentOfReads INT = 40
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+WHERE reads_ratio >= @HighPercentOfReads
+
+
+/* Indexes with a high percent (default of 40%) of writes compared to reads will get a -1 weight on final formula.
+   The idea is to disfavor compression on tables with a high number of writes compared to reads. */
+DECLARE @HighPercentOfWrites INT = 40
+UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight - 1
+WHERE writes_ratio >= @HighPercentOfWrites
+
+/* Indexes with high waits (default of TOP 500 indexes by page IO latch) on page IO latch will get an extra weight on final formula.
+   The idea is to favor compression on indexes waiting to be read from disk. */
+DECLARE @TopNPageIOLatch INT = 500
+
+IF OBJECT_ID('tempdb.dbo.#tmp_top_pageio_latch') IS NOT NULL
+  DROP TABLE #tmp_top_pageio_latch
+
+SELECT TOP (@TopNPageIOLatch) database_name, object_name, schema_name, index_name 
+INTO #tmp_top_pageio_latch
+FROM tempdb.dbo.tmpIndexCheck45
+ORDER BY page_io_latch_wait_count DESC
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+WHERE EXISTS(SELECT * FROM #tmp_top_pageio_latch AS a 
+             WHERE a.database_name = tmpIndexCheck45.database_name
+             AND a.object_name = tmpIndexCheck45.object_name
+             AND a.schema_name = tmpIndexCheck45.schema_name
+             AND a.index_name = tmpIndexCheck45.index_name)
+
+/* Indexes with a high (default of TOP 500 indexes by buffer pool memory usage) buffer pool memory usage will get an extra weight on final formula.
+   The idea is to favor compression on indexes using lot of memory. */
+/* If PLE is low (default of 500), double the @TopNBufferPool value to get more indexes compressed. */
+DECLARE @LowPLEValue INT = 500
+DECLARE @TopNBufferPool INT = 500
+
+IF EXISTS(SELECT *
+          FROM sys.dm_os_performance_counters
+          WHERE OBJECT_NAME LIKE '%Buffer Node%'
+          AND counter_name LIKE '%Page life%'
+          AND cntr_value <= @LowPLEValue)
+BEGIN
+  SET @TopNBufferPool = @TopNBufferPool * 2
+END
+
+IF OBJECT_ID('tempdb.dbo.#tmp_top_bp') IS NOT NULL
+  DROP TABLE #tmp_top_bp
+
+SELECT TOP (@TopNBufferPool) database_name, object_name, schema_name, index_name 
+INTO #tmp_top_bp
+FROM tempdb.dbo.tmpIndexCheck45
+ORDER BY buffer_pool_spaceused_mb DESC
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+WHERE EXISTS(SELECT * FROM #tmp_top_bp AS a 
+             WHERE a.database_name = tmpIndexCheck45.database_name
+             AND a.object_name = tmpIndexCheck45.object_name
+             AND a.schema_name = tmpIndexCheck45.schema_name
+             AND a.index_name = tmpIndexCheck45.index_name)
+
+/* Most used (default of TOP 200 indexes by avg of access per minute) indexes will get an extra weight on final formula.
+   The idea is to favor compression on most used indexes. */
+DECLARE @TopNMostUsedIndexes INT = 200
+IF OBJECT_ID('tempdb.dbo.#tmp_most_used') IS NOT NULL
+  DROP TABLE #tmp_most_used
+
+SELECT TOP (@TopNMostUsedIndexes) database_name, object_name, schema_name, index_name 
+INTO #tmp_most_used
+FROM tempdb.dbo.tmpIndexCheck45
+ORDER BY avg_of_access_per_minute_based_on_index_usage_dmv DESC
+
+UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+WHERE EXISTS(SELECT * FROM #tmp_most_used AS a 
+             WHERE a.database_name = tmpIndexCheck45.database_name
+             AND a.object_name = tmpIndexCheck45.object_name
+             AND a.schema_name = tmpIndexCheck45.schema_name
+             AND a.index_name = tmpIndexCheck45.index_name)
+
+
+/* Select final results */
+SELECT * FROM tempdb.dbo.tmpIndexCheck45
+WHERE 1=1
+AND IsRecommendedAlgorithm = 1
+ORDER BY CompressionOrderWeight DESC, CompressionOrder ASC

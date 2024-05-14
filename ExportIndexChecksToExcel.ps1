@@ -432,20 +432,28 @@ try
 {
     #If -Force_sp_GetIndexInfo_Execution is set, recreate and run proc sp_GetIndexInfo  
 	if ($Force_sp_GetIndexInfo_Execution) {
-		Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
+        try
+        {
+            Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
+            $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
+		    Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -InputFile $TsqlFile -ErrorAction Stop
 
-        $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -InputFile $TsqlFile -ErrorAction Stop
-
-        #Using -Verbose to capture SQL Server message output
-		if ($Database){
-            $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -Verbose -ErrorAction Stop
+            #Using -Verbose to capture SQL Server message output
+		    if ($Database){
+                $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
+                Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -Verbose -ErrorAction Stop
+            }
+            else{
+                Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+            }
+            Write-Msg "Finished to run sp_GetIndexInfo"
         }
-        else{
-            Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+        catch 
+        {
+            Write-Msg -Message "Error trying to run sp_GetIndexInfo." -Level Error
+            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+            fnReturn
         }
-        Write-Msg "Finished to run sp_GetIndexInfo"
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
