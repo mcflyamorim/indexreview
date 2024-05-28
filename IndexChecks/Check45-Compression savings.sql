@@ -39,11 +39,11 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* ------------------------------------------------------------------------------------------------ */
 DECLARE @database_name_filter SYSNAME = '' /*set to null to run script in all DBs*/;
 DECLARE @min_rows             BIGINT  = 1000 /*Min of rows on table to be considered on estimation*/;
-DECLARE @min_mb               BIGINT  = 100 /*250MB*/ /*Min of MBs on table to be considered on estimation*/;
+DECLARE @min_mb               BIGINT  = 100 /*100MB*/ /*Min of MBs on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
 --DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
-DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE' /*List of compression to be estimated*/;
+DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
 DECLARE @max_mb_to_sample     NUMERIC(25, 2) = 20 /*Max of MBs to read from source table to be used to populate the temporary object*/
 DECLARE @compress_column_size BIGINT         = 500 /*Min column size to be considered for COMPRESS test*/
 
