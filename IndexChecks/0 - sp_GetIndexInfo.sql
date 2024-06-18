@@ -73,6 +73,14 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000; /*1 second*/
 
 DECLARE @statusMsg  VARCHAR(MAX) = ''
+DECLARE @AmazonRDS bit = CASE WHEN DB_ID('rdsadmin') IS NOT NULL AND SUSER_SNAME(0x01) = 'rdsa' THEN 1 ELSE 0 END
+
+
+IF SERVERPROPERTY('EngineEdition') IN (5 /* 5 = SQL Azure*/, 8 /*8 = Azure SQL Managed Instance*/) OR @AmazonRDS = 1
+BEGIN
+  PRINT ''
+END
+
 
 /* If data already exists, skip the population, unless refresh was asked via @refreshdata */
 IF OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo') IS NOT NULL
