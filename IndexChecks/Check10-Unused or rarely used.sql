@@ -27,8 +27,36 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck10') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck10
+------------------------
+-- Uptime information --
+------------------------
+DECLARE @sqlcmd NVARCHAR(MAX),
+        @params NVARCHAR(600),
+        @sqlmajorver INT;
+DECLARE @UpTime VARCHAR(12),@StartDate DATETIME
+
+SELECT @sqlmajorver = CONVERT(INT, (@@microsoftversion / 0x1000000) & 0xff);
+
+IF @sqlmajorver < 10
+BEGIN
+    SET @sqlcmd
+        = N'SELECT @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()), @StartDateOUT = login_time FROM sysprocesses (NOLOCK) WHERE spid = 1';
+END;
+ELSE
+BEGIN
+    SET @sqlcmd
+        = N'SELECT @UpTimeOUT = DATEDIFF(mi,sqlserver_start_time,GETDATE()), @StartDateOUT = sqlserver_start_time FROM sys.dm_os_sys_info (NOLOCK)';
+END;
+
+SET @params = N'@UpTimeOUT VARCHAR(12) OUTPUT, @StartDateOUT DATETIME OUTPUT';
+
+EXECUTE sp_executesql @sqlcmd,
+                      @params,
+                      @UpTimeOUT = @UpTime OUTPUT,
+                      @StartDateOUT = @StartDate OUTPUT;
+
+IF OBJECT_ID('dbo.tmpIndexCheck10') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck10
 
 SELECT 'Check 10 - Unused or rarely used indexes' AS [Info],
         a.Database_Name,
@@ -59,18 +87,18 @@ SELECT 'Check 10 - Unused or rarely used indexes' AS [Info],
           WHEN ISNULL(Number_of_Reads,0) > 0 AND [Reads_Ratio] < 5 THEN '[Rarely used index. It is recommended to revise the need to maintain all these objects as soon as possible]'
           ELSE  'OK'
         END AS [Comment 3]
-   INTO tempdb.dbo.tmpIndexCheck10
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck10
+   FROM dbo.Tab_GetIndexInfo AS a
    CROSS APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (a.user_seeks + a.user_scans + a.user_lookups) = 0 THEN 0 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups)) * 100 /
               		       CASE (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates)) END END AS DECIMAL(18,2))),0)) AS Tab1([Reads_Ratio])
    CROSS APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN a.user_updates = 0 THEN 0 ELSE CONVERT(REAL, a.user_updates) * 100 /
 		                     CASE (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates) WHEN 0 THEN 1 ELSE CONVERT(REAL, (a.user_seeks + a.user_scans + a.user_lookups + a.user_updates)) END END AS DECIMAL(18,2))),0)) AS Tab2([Writes_Ratio])
    CROSS APPLY (SELECT CONVERT(VARCHAR(200), user_seeks + user_scans + user_lookups + user_updates / 
-                                CASE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                                CASE DATEDIFF(mi, @StartDate, GETDATE())
                                   WHEN 0 THEN 1
-                                  ELSE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                                  ELSE DATEDIFF(mi, @StartDate, GETDATE())
                                 END)) AS tab3(avg_of_access_per_minute_based_on_index_usage_dmv)
-SELECT * FROM tempdb.dbo.tmpIndexCheck10
+SELECT * FROM dbo.tmpIndexCheck10
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,

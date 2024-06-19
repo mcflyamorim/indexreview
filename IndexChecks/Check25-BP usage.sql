@@ -28,8 +28,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck25') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck25
+IF OBJECT_ID('dbo.tmpIndexCheck25') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck25
 
 SELECT TOP 1000
        'Check25 - Indexes by memory usage' AS [Info],
@@ -51,8 +51,8 @@ SELECT TOP 1000
        a.fill_factor,
        CONVERT(NUMERIC(18, 2), a.avg_fragmentation_in_percent) AS avg_fragmentation_in_percent,
        CONVERT(NUMERIC(18, 2), a.avg_page_space_used_in_percent) AS avg_page_space_used_in_percent
-  INTO tempdb.dbo.tmpIndexCheck25
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck25
+  FROM dbo.Tab_GetIndexInfo a
 WHERE a.Buffer_Pool_SpaceUsed_MB > 0
 ORDER BY a.Buffer_Pool_SpaceUsed_MB DESC,
          a.Number_Rows DESC, 
@@ -62,7 +62,7 @@ ORDER BY a.Buffer_Pool_SpaceUsed_MB DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck25
+SELECT * FROM dbo.tmpIndexCheck25
 ORDER BY Buffer_Pool_SpaceUsed_MB DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

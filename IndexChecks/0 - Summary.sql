@@ -16,7 +16,7 @@ SELECT @sqlmajorver = CONVERT(INT, (@@microsoftversion / 0x1000000) & 0xff);
 IF @sqlmajorver < 10
 BEGIN
     SET @sqlcmd
-        = N'SELECT @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()), @StartDateOUT = login_time FROM master..sysprocesses (NOLOCK) WHERE spid = 1';
+        = N'SELECT @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()), @StartDateOUT = login_time FROM sysprocesses (NOLOCK) WHERE spid = 1';
 END;
 ELSE
 BEGIN
@@ -31,8 +31,8 @@ EXECUTE sp_executesql @sqlcmd,
                       @UpTimeOUT = @UpTime OUTPUT,
                       @StartDateOUT = @StartDate OUTPUT;
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheckSummary') IS NOT NULL
-    DROP TABLE tempdb.dbo.tmpIndexCheckSummary;
+IF OBJECT_ID('dbo.tmpIndexCheckSummary') IS NOT NULL
+    DROP TABLE dbo.tmpIndexCheckSummary;
 WITH CTE_1
 AS (
    SELECT CONVERT(VARCHAR(8000), 'SQL Server instance startup time: ' + CONVERT(VARCHAR(30), @StartDate, 20)) AS [info],
@@ -47,7 +47,7 @@ AS (
           'NA' AS prioritycol,
           'NA' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.Tab_GetIndexInfo
+   FROM dbo.Tab_GetIndexInfo
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Total number of tables: ') AS [info],
@@ -55,7 +55,7 @@ AS (
           'NA' AS prioritycol,
           'NA' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.Tab_GetIndexInfo
+   FROM dbo.Tab_GetIndexInfo
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Total number of indexes: ') AS [info],
@@ -63,7 +63,7 @@ AS (
           'NA' AS prioritycol,
           'NA' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.Tab_GetIndexInfo
+   FROM dbo.Tab_GetIndexInfo
    UNION ALL
 
    SELECT TOP 1 
@@ -72,7 +72,7 @@ AS (
           'NA' AS prioritycol,
           'Check29' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck29
+   FROM dbo.tmpIndexCheck29
    ORDER BY Number_Of_Indexes_On_Table DESC
    UNION ALL
 
@@ -82,10 +82,10 @@ AS (
           'NA' AS prioritycol,
           'Check29' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck3
+   FROM dbo.tmpIndexCheck3
    INNER JOIN (SELECT TOP 1 
                        t1.*
-                FROM tempdb.dbo.tmpIndexCheck29 AS t1
+                FROM dbo.tmpIndexCheck29 AS t1
                 ORDER BY t1.Number_Of_Indexes_On_Table DESC) AS t1
    ON  t1.Database_Name = tmpIndexCheck3.Database_Name
    AND t1.Schema_Name = tmpIndexCheck3.Schema_Name
@@ -99,21 +99,21 @@ AS (
           'NA' AS prioritycol,
           'Check29' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck28
+   FROM dbo.tmpIndexCheck28
    ORDER BY KeyColumnsCount DESC
    UNION ALL
 
-   SELECT TOP 1 
+   SELECT TOP 1
           CONVERT(VARCHAR(8000), 'Most accessed table: '+QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' (' + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, Number_Rows), 1), '.00', '')  + ' rows) with '+ CONVERT(VARCHAR, user_seeks + user_scans + user_lookups + user_updates) + ' accesses ('+ CONVERT(VARCHAR, CONVERT(NUMERIC(25,2), tab1.avg_of_access_per_minute_based_on_index_usage_dmv)) +' per min): ' ) AS [info],
           '- ' + CONVERT(VARCHAR(200), CONVERT(NUMERIC(25,2), tab1.avg_of_access_per_minute_based_on_index_usage_dmv)) + ' -' AS [result],
           'NA' AS prioritycol,
           'Check10' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   FROM dbo.Tab_GetIndexInfo AS a
    CROSS APPLY (SELECT CONVERT(VARCHAR(200), CONVERT(NUMERIC(25,2), user_seeks + user_scans + user_lookups + user_updates) / 
-                                CASE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                                CASE DATEDIFF(mi, @StartDate, GETDATE())
                                   WHEN 0 THEN 1
-                                  ELSE DATEDIFF(mi, (SELECT create_date FROM sys.databases WHERE name = 'tempdb'), GETDATE())
+                                  ELSE DATEDIFF(mi, @StartDate, GETDATE())
                                 END)) AS tab1(avg_of_access_per_minute_based_on_index_usage_dmv)
    WHERE user_seeks + user_scans + user_lookups + user_updates > 0
    ORDER BY tab1.avg_of_access_per_minute_based_on_index_usage_dmv DESC
@@ -124,7 +124,7 @@ AS (
           'NA' AS prioritycol,
           'Check5' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck5
+   FROM dbo.tmpIndexCheck5
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of objects with dangerous set:')  AS [info],
@@ -132,7 +132,7 @@ AS (
           'NA' AS prioritycol,
           'Check6' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck6
+   FROM dbo.tmpIndexCheck6
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of tables with incorrect filtered index definition:')  AS [info],
@@ -140,12 +140,12 @@ AS (
           'NA' AS prioritycol,
           'Check7' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck7
+   FROM dbo.tmpIndexCheck7
    WHERE Comment <> 'OK'
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Found a index maintenance plan: ') AS [info],
-          CONVERT(VARCHAR(200), CASE WHEN EXISTS(SELECT 1 FROM tempdb.dbo.tmpIndexCheck17 WHERE comment = 'OK') THEN 1 ELSE 0 END) AS [result],
+          CONVERT(VARCHAR(200), CASE WHEN EXISTS(SELECT 1 FROM dbo.tmpIndexCheck17 WHERE comment = 'OK') THEN 1 ELSE 0 END) AS [result],
           'High' AS prioritycol,
           'Check40' AS more_info,
           'NA' AS quick_fix
@@ -157,7 +157,7 @@ AS (
           'High' AS prioritycol,
           'Check2' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck2
+   FROM dbo.tmpIndexCheck2
    WHERE ReservedSizeInMB >= 10
    UNION ALL
 
@@ -167,7 +167,7 @@ AS (
           'High' AS prioritycol,
           'Check27' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck27
+   FROM dbo.tmpIndexCheck27
    WHERE ReservedSizeInMB >= 10
    ORDER BY user_scans DESC
    UNION ALL
@@ -178,7 +178,7 @@ AS (
           'High' AS prioritycol,
           'Check27' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck27
+   FROM dbo.tmpIndexCheck27
    WHERE current_number_of_rows_table >= 10000000 /*10mi*/
    ORDER BY user_scans DESC
    UNION ALL
@@ -188,7 +188,7 @@ AS (
           'High' AS prioritycol,
           'Check3' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck3
+   FROM dbo.tmpIndexCheck3
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of overlapped indexes: ' ) AS [info],
@@ -196,7 +196,7 @@ AS (
           'High' AS prioritycol,
           'Check3' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck3
+   FROM dbo.tmpIndexCheck3
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes with very low page density (avg rows per page <= 20) (only considering tables >= 1000 rows): ' ) AS [info],
@@ -204,7 +204,7 @@ AS (
           'High' AS prioritycol,
           'Check1' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck1
+   FROM dbo.tmpIndexCheck1
    WHERE [Avg rows per page] <= 20
    AND current_number_of_rows_table >= 1000
    UNION ALL
@@ -214,7 +214,7 @@ AS (
           'High' AS prioritycol,
           'Check10' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck10
+   FROM dbo.tmpIndexCheck10
    WHERE [Comment 2] <> 'OK'
    UNION ALL
 
@@ -223,7 +223,7 @@ AS (
           'High' AS prioritycol,
           'Check10' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck10
+   FROM dbo.tmpIndexCheck10
    WHERE [Comment 1] <> 'OK'
    UNION ALL
 
@@ -232,7 +232,7 @@ AS (
           'High' AS prioritycol,
           'Check10' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck10
+   FROM dbo.tmpIndexCheck10
    WHERE [Comment 3] <> 'OK'
    UNION ALL
 
@@ -241,7 +241,7 @@ AS (
           'Medium' AS prioritycol,
           'Check16' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck16
+   FROM dbo.tmpIndexCheck16
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes with fillfactor <= 80: ' ) AS [info],
@@ -249,7 +249,7 @@ AS (
           'High' AS prioritycol,
           'Check4' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck4
+   FROM dbo.tmpIndexCheck4
   WHERE fill_factor <= 80
    UNION ALL
 
@@ -258,7 +258,7 @@ AS (
           'Low' AS prioritycol,
           'Check9' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck9
+   FROM dbo.tmpIndexCheck9
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of missing index DMV: ' ) AS [info],
@@ -266,7 +266,7 @@ AS (
           'High' AS prioritycol,
           'Check21' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck21
+   FROM dbo.tmpIndexCheck21
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of missing index plan cache: ' ) AS [info],
@@ -274,7 +274,7 @@ AS (
           'High' AS prioritycol,
           'Check22' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck22
+   FROM dbo.tmpIndexCheck22
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes with key size bigger then the limit: ' ) AS [info],
@@ -282,7 +282,7 @@ AS (
           'Low' AS prioritycol,
           'Check11' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck11
+   FROM dbo.tmpIndexCheck11
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of hypothetical indexes: ' ) AS [info],
@@ -290,7 +290,7 @@ AS (
           'Low' AS prioritycol,
           'Check12' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck12
+   FROM dbo.tmpIndexCheck12
    WHERE [Database_Name] IS NOT NULL
    UNION ALL
 
@@ -299,7 +299,7 @@ AS (
           'Medium' AS prioritycol,
           'Check13' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck13
+   FROM dbo.tmpIndexCheck13
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of non-unique clustered indexes: ' ) AS [info],
@@ -307,7 +307,7 @@ AS (
           'Low' AS prioritycol,
           'Check14' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck14
+   FROM dbo.tmpIndexCheck14
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes using a GUID on key: ' ) AS [info],
@@ -315,7 +315,7 @@ AS (
           'Medium' AS prioritycol,
           'Check15' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck15
+   FROM dbo.tmpIndexCheck15
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of tables that do not have a clustered index, but have non-clustered index: ' ) AS [info],
@@ -323,7 +323,7 @@ AS (
           'Medium' AS prioritycol,
           'Check18' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck18
+   FROM dbo.tmpIndexCheck18
    WHERE [DatabaseName] IS NOT NULL
    UNION ALL
 
@@ -332,7 +332,7 @@ AS (
           'Medium' AS prioritycol,
           'Check18' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck19
+   FROM dbo.tmpIndexCheck19
    WHERE current_number_of_rows_table > 0
    UNION ALL
 
@@ -341,7 +341,7 @@ AS (
           'High' AS prioritycol,
           'Check20' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck20
+   FROM dbo.tmpIndexCheck20
    WHERE [DatabaseName] IS NOT NULL
    UNION ALL
 
@@ -350,7 +350,7 @@ AS (
           'High' AS prioritycol,
           'Check23' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck23
+   FROM dbo.tmpIndexCheck23
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of tables with nonclust indexes good candidates to be recreated with clust: ') AS [info],
@@ -358,7 +358,7 @@ AS (
           'Medium' AS prioritycol,
           'Check46' AS more_info,
           'NA' AS quick_fix
-   FROM (SELECT DISTINCT table_name FROM tempdb.dbo.tmpIndexCheck46 WHERE comment <> 'OK') AS t
+   FROM (SELECT DISTINCT table_name FROM dbo.tmpIndexCheck46 WHERE comment <> 'OK') AS t
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of clustered indexes with singleton lookup ratio >= 90%: ') AS [info],
@@ -366,7 +366,7 @@ AS (
           'Medium' AS prioritycol,
           'Check31' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck31
+   FROM dbo.tmpIndexCheck31
    WHERE singleton_lookup_ratio >= 90
    UNION ALL
 
@@ -375,7 +375,7 @@ AS (
           'Medium' AS prioritycol,
           'Check32' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck32
+   FROM dbo.tmpIndexCheck32
    WHERE [Comment] <> 'OK'
    UNION ALL
 
@@ -384,7 +384,7 @@ AS (
           'High' AS prioritycol,
           'Check33' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck33
+   FROM dbo.tmpIndexCheck33
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of non-partitioned tables with more than 10mi rows: ') AS [info],
@@ -392,7 +392,7 @@ AS (
           'Medium' AS prioritycol,
           'Check34' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck34
+   FROM dbo.tmpIndexCheck34
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of non-compressed indexes: ') AS [info],
@@ -400,7 +400,7 @@ AS (
           'High' AS prioritycol,
           'Check35' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck35
+   FROM dbo.tmpIndexCheck35
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes on ascending columns: ') AS [info],
@@ -408,7 +408,7 @@ AS (
           'Medium' AS prioritycol,
           'Check36' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck36
+   FROM dbo.tmpIndexCheck36
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Number of indexes on ascending columns with fillfactor <> 100: ') AS [info],
@@ -416,7 +416,7 @@ AS (
           'Medium' AS prioritycol,
           'Check36' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck36
+   FROM dbo.tmpIndexCheck36
    WHERE Fill_factor NOT IN (0, 100)
    UNION ALL
 
@@ -425,7 +425,7 @@ AS (
           'Medium' AS prioritycol,
           'Check36' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck36
+   FROM dbo.tmpIndexCheck36
    WHERE Fill_factor NOT IN (0, 100)
    UNION ALL
 
@@ -434,7 +434,7 @@ AS (
           'High' AS prioritycol,
           'Check38' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck38
+   FROM dbo.tmpIndexCheck38
    WHERE [DatabaseName] IS NOT NULL
    UNION ALL
 
@@ -443,7 +443,7 @@ AS (
           'High' AS prioritycol,
           'Check39' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck39
+   FROM dbo.tmpIndexCheck39
    WHERE [Comment] <> 'OK'
    UNION ALL
 
@@ -452,7 +452,7 @@ AS (
           'Medium' AS prioritycol,
           'Check41' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck41
+   FROM dbo.tmpIndexCheck41
    WHERE [Comment] <> 'OK'
    UNION ALL
 
@@ -461,7 +461,7 @@ AS (
           'High' AS prioritycol,
           'Check42' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck42
+   FROM dbo.tmpIndexCheck42
    WHERE YearsCnt >= 10
    UNION ALL
 
@@ -471,7 +471,7 @@ AS (
           'High' AS prioritycol,
           'Check37' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck37
+   FROM dbo.tmpIndexCheck37
    WHERE total_row_lock_wait_in_ms > 0
    ORDER BY total_row_lock_wait_in_ms DESC
    UNION ALL
@@ -482,7 +482,7 @@ AS (
           'High' AS prioritycol,
           'Check37' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck37
+   FROM dbo.tmpIndexCheck37
    WHERE total_page_lock_wait_in_ms > 0
    ORDER BY total_page_lock_wait_in_ms DESC
    UNION ALL
@@ -493,7 +493,7 @@ AS (
           'High' AS prioritycol,
           'Check24' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck24
+   FROM dbo.tmpIndexCheck24
    WHERE total_page_io_latch_wait_in_ms > 0
    ORDER BY total_page_io_latch_wait_in_ms DESC
    UNION ALL
@@ -504,7 +504,7 @@ AS (
           'High' AS prioritycol,
           'Check30' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck30
+   FROM dbo.tmpIndexCheck30
    WHERE total_page_latch_wait_in_ms > 0
    ORDER BY total_page_latch_wait_in_ms DESC
    UNION ALL
@@ -515,7 +515,7 @@ AS (
           'High' AS prioritycol,
           'Check25' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck25
+   FROM dbo.tmpIndexCheck25
    ORDER BY Buffer_Pool_SpaceUsed_MB DESC
    UNION ALL
 
@@ -525,7 +525,7 @@ AS (
           'High' AS prioritycol,
           'Check25' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck25
+   FROM dbo.tmpIndexCheck25
    ORDER BY Buffer_Pool_FreeSpace_MB DESC
    UNION ALL
 
@@ -534,7 +534,7 @@ AS (
           'High' AS prioritycol,
           'Check25' AS more_info,
           'NA' AS quick_fix
-   FROM (SELECT TOP 10 * FROM tempdb.dbo.tmpIndexCheck25 ORDER BY Buffer_Pool_SpaceUsed_MB DESC) AS t
+   FROM (SELECT TOP 10 * FROM dbo.tmpIndexCheck25 ORDER BY Buffer_Pool_SpaceUsed_MB DESC) AS t
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'BP total of free space used: ' + CONVERT(VARCHAR, CONVERT(NUMERIC(25, 2), SUM(Buffer_Pool_FreeSpace_MB) / 1024.)) + 'gb') AS [info],
@@ -542,7 +542,7 @@ AS (
           'High' AS prioritycol,
           'Check25' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck25
+   FROM dbo.tmpIndexCheck25
    UNION ALL
 
    SELECT TOP 1 
@@ -551,19 +551,19 @@ AS (
           'High' AS prioritycol,
           'Check26' AS more_info,
           'NA' AS quick_fix
-   FROM tempdb.dbo.tmpIndexCheck26
+   FROM dbo.tmpIndexCheck26
    ORDER BY index_lock_escaltion_count DESC
    UNION ALL
 
    SELECT CONVERT(VARCHAR(8000), 'Non default instance config is used: ') AS [info],
-          CONVERT(VARCHAR(200), CASE WHEN EXISTS(SELECT 1 FROM tempdb.dbo.tmpIndexCheck17 WHERE comment <> 'OK') THEN 1 ELSE 0 END) AS [result],
+          CONVERT(VARCHAR(200), CASE WHEN EXISTS(SELECT 1 FROM dbo.tmpIndexCheck17 WHERE comment <> 'OK') THEN 1 ELSE 0 END) AS [result],
           'Medium' AS prioritycol,
           'Check26' AS more_info,
           'NA' AS quick_fix
    )
 SELECT *
-INTO tempdb.dbo.tmpIndexCheckSummary
+INTO dbo.tmpIndexCheckSummary
 FROM CTE_1;
 
 SELECT *
-FROM tempdb.dbo.tmpIndexCheckSummary;
+FROM dbo.tmpIndexCheckSummary;

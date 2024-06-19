@@ -25,8 +25,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck42') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck42
+IF OBJECT_ID('dbo.tmpIndexCheck42') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck42
 
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
@@ -51,7 +51,7 @@ SELECT MIN(' + QUOTENAME(key_column_name) + ') AS cMin, MAX(' + QUOTENAME(key_co
 ' CROSS APPLY(SELECT COUNT(*) AS CountMax FROM ' + QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' AS t2 WITH(NOLOCK) WHERE t2.' + QUOTENAME(key_column_name) + ' = t.cMax) AS tCountMax' + 
 ' OPTION(MAXDOP 1);'
 AS Cmd
-FROM tempdb.dbo.Tab_GetIndexInfo
+FROM dbo.Tab_GetIndexInfo
 WHERE key_column_data_type LIKE '%DATE%'
 AND IsTablePartitioned = 0 /* Not reading data from partitioned indexes due to QO limitation to find min/max values from a partitioned table */
 AND Number_Rows >= 1000000 /* Only tables >= 1mi rows */
@@ -107,14 +107,14 @@ SELECT MIN(' + QUOTENAME(key_column_name) + ') AS cMin, MAX(' + QUOTENAME(key_co
 ' CROSS APPLY(SELECT COUNT(*) AS CountMin FROM ' + QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' AS t1 WITH(NOLOCK) WHERE t1.' + QUOTENAME(key_column_name) + ' = t.cMin) AS tCountMin' + 
 ' CROSS APPLY(SELECT COUNT(*) AS CountMax FROM ' + QUOTENAME(Database_Name) + '.' + QUOTENAME(Schema_Name) + '.' + QUOTENAME(Table_Name) + ' AS t2 WITH(NOLOCK) WHERE t2.' + QUOTENAME(key_column_name) + ' = t.cMax) AS tCountMax' + 
 ' OPTION(MAXDOP 1);' AS Cmd
-INTO tempdb.dbo.tmpIndexCheck42
+INTO dbo.tmpIndexCheck42
 FROM #tmp1
-INNER JOIN tempdb.dbo.Tab_GetIndexInfo
+INNER JOIN dbo.Tab_GetIndexInfo
 ON Tab_GetIndexInfo.Database_ID = #tmp1.Database_ID
 AND Tab_GetIndexInfo.Object_ID = #tmp1.Object_ID
 AND Tab_GetIndexInfo.Index_ID = #tmp1.Index_ID
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck42
+SELECT * FROM dbo.tmpIndexCheck42
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,

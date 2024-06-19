@@ -26,7 +26,7 @@
 param
 (
     [parameter(Mandatory=$false)]
-    [String] $SQLInstance = "DELLFABIANO\SQL2019",
+    [String] $SQLInstance = "",
     [String]$UserName,
     [String]$Password,
     [String]$Database = "",
@@ -422,29 +422,145 @@ if (-not (Get-Module -Name SqlServer)) {
     fnReturn
 }
 
-$Params = @{}
-if ( $UserName -and $Password ) {
-    $Params.Username = $UserName
-    $Params.Password = $Password
+# Installing Az.Accounts module...
+# Module may be installed but not imported into the PS scope session... if so, call import-module
+if(Get-Module -Name Az.Accounts -ListAvailable){
+    Import-Module Az.Accounts -Force -ErrorAction Stop
+}
+if(-not (Get-Module -Name Az.Accounts))
+{
+    Write-Msg -Message "Az.Accounts is not installed, trying to install" -VerboseMsg
+    Write-Msg -Message "Trying to manually install Az.Accounts from Util folder" -VerboseMsg
+    if (Test-Path -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -PathType Leaf){
+        try {
+            foreach ($modpath in $($env:PSModulePath -split [IO.Path]::PathSeparator)) {
+                #Grab the user's default home directory module path for later
+                if ($modpath -like "*$([Environment]::UserName)*") {
+                    $userpath = $modpath
+                }
+                try {
+                    $temppath = Join-Path -Path $modpath -ChildPath "Az.Accounts"
+                    $localpath = (Get-ChildItem $temppath -ErrorAction Stop).FullName
+                } catch {
+                    $localpath = $null
+                }
+            }
+            if ($null -eq $localpath) {
+                if (!(Test-Path -Path $userpath)) {
+                    try {
+                        Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
+                        New-Item -Path $userpath -ItemType Directory | Out-Null
+                    } catch {
+                        throw "Can't create $userpath. You may need to Run as Administrator: $_"
+                    }
+                }
+                # In case Az.Accounts is not currently installed in any PSModulePath put it in the $userpath
+                if (Test-Path -Path $userpath) {
+                    $localpath = Join-Path -Path $userpath -ChildPath "Az.Accounts"
+                }
+            } else {
+                Write-Msg -Message "Updating current install" -VerboseMsg
+            }
+            $path = $localpath
+            if (!(Test-Path -Path $path)) {
+                try {
+                    Write-Msg -Message "Creating directory: $path" -VerboseMsg
+                    New-Item -Path $path -ItemType Directory | Out-Null
+                } catch {
+                    throw "Can't create $path. You may need to Run as Administrator: $_"
+                }
+            }
+
+            $AzAccountsDir = "$path"
+            $OutZip = Join-Path $AzAccountsDir 'Az.Accounts.zip'
+            Copy-Item -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -Destination $OutZip -ErrorAction Stop | Out-Null
+            if (Test-Path $OutZip) {
+                Write-Msg -Message "Trying to unzip $OutZip file" -VerboseMsg
+                Add-Type -AssemblyName 'System.Io.Compression.FileSystem'
+                [io.compression.zipfile]::ExtractToDirectory($OutZip, $AzAccountsDir)
+                if (Test-Path "$AzAccountsDir\Az.Accounts.psd1") {
+                    Write-Msg -Message "File extracted to $AzAccountsDir" -VerboseMsg
+                }
+            }
+            else {
+                throw "$OutZip file was not found"
+            }
+            $AzAccountsDir = "$AzAccountsDir\Az.Accounts.psd1"
+            Import-Module $AzAccountsDir -Force -ErrorAction Stop
+        } catch {
+            Write-Msg -Message "Error trying to install Az.Accounts from Util folder" -Level Error
+            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+        }
+    }
+    else {
+        Write-Msg "Could not find file $ScriptPath\Util\Az.Accounts\Az.Accounts.zip, please make sure you've copied Az.Accounts.zip file to Util folder of this script." -Level Error
+        fnReturn
+    }
+    if(-not (Get-Module -Name Az.Accounts)){
+        try {
+            Write-Msg -Message "Trying to install Az.Accounts via Install-Module" -VerboseMsg
+            Install-Module Az.Accounts -Scope CurrentUser -Confirm:$False -Force -ErrorAction Stop | Out-Null
+            Import-Module Az.Accounts -Force -ErrorAction Stop
+        } catch {
+            Write-Msg -Message "Error trying to install Az.Accounts via Install-Module" -Level Error
+            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+        }
+    }
+}
+if (-not (Get-Module -Name Az.Accounts)) {
+    Write-Msg -Message "Az.Accounts is not installed, please install it before continue" -Level Error
+    fnReturn
+}
+
+# If instance is a AzureDB or SQLMI connect using a token
+if ($instance -like "*database.windows.net*"){
+    # Enables all AzureRm prefixes for the current PowerShell session.
+    Enable-AzureRmAlias -Scope CurrentUser | Out-NUll
+
+    ### Obtain the Access Token: this will bring up the login dialog
+    Connect-AzAccount -WarningAction Ignore | Out-NUll
+    $access_token = (Get-AzAccessToken -ResourceUrl https://database.windows.net).Token
+
+    $Params = @{}
+    if ( $access_token ) {
+        $Params.AccessToken = $access_token
+        $Params.Database = $Database
+    }
+}
+else{
+    $Params = @{}
+    if ( $UserName -and $Password ) {
+        $Params.Username = $UserName
+        $Params.Password = $Password
+    }
 }
 
 try
 {
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
+
+	if (($Result -eq 5 <#Azure DB#>) -or ($Result -eq 8 <#SQL Managed Instance#>)) {
+        if ([string]::IsNullOrEmpty($Database)){
+            Write-Msg "Database parameter is required to run the review on SQL Azure or SQL MI. Please specify the database parameter and try again." -Level Error
+            fnReturn
+        }
+	}
+
     #If -Force_sp_GetIndexInfo_Execution is set, recreate and run proc sp_GetIndexInfo  
 	if ($Force_sp_GetIndexInfo_Execution) {
         try
         {
             Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
             $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		    Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -InputFile $TsqlFile -ErrorAction Stop
+		    Invoke-SqlCmd @Params -ServerInstance $instance -InputFile $TsqlFile -ErrorAction Stop
 
             #Using -Verbose to capture SQL Server message output
 		    if ($Database){
-                $Query1 = "EXEC master.dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-                Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query $Query1 -Verbose -ErrorAction Stop
+                $Query1 = "EXEC dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
+                Invoke-SqlCmd @Params -ServerInstance $instance -Query $Query1 -Verbose -ErrorAction Stop
             }
             else{
-                Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -Query "EXEC master.dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+                Invoke-SqlCmd @Params -ServerInstance $instance -Query "EXEC dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
             }
             Write-Msg "Finished to run sp_GetIndexInfo"
         }
@@ -457,10 +573,10 @@ try
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "tempdb" -Query "SELECT ISNULL(OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Query "SELECT ISNULL(OBJECT_ID('dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
 
 	if ($Result -eq 0) {
-		Write-Msg "Could not find table tempdb.dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
+		Write-Msg "Could not find table dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
         Write-Msg "Use option -Force_sp_GetIndexInfo_Execution to create and execute the proc" -Level Error
         fnReturn
 	}
@@ -479,7 +595,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -635,9 +751,9 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -Database "master" -MaxCharLength 10000000 `
-                            -Query "SELECT prioritycol, COUNT(*) AS cnt FROM tempdb.dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
+        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 `
+                            -Query "SELECT prioritycol, COUNT(*) AS cnt FROM dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str                            

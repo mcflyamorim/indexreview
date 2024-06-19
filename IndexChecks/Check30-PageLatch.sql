@@ -37,8 +37,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck30') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck30
+IF OBJECT_ID('dbo.tmpIndexCheck30') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck30
 
 SELECT TOP 1000
        'Check 30 - Indexes waiting for PAGELATCH' AS [Info],
@@ -56,8 +56,8 @@ SELECT TOP 1000
        a.page_latch_wait_in_ms AS total_page_latch_wait_in_ms,
        CAST(1. * a.page_latch_wait_in_ms / NULLIF(a.page_latch_wait_count ,0) AS decimal(12,2)) AS page_latch_avg_wait_ms,
        CONVERT(VARCHAR(200), ((page_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_latch_wait_in_ms) / 1000), 0), 108) AS total_page_latch_wait_d_h_m_s
-  INTO tempdb.dbo.tmpIndexCheck30
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck30
+  FROM dbo.Tab_GetIndexInfo a
  WHERE a.page_latch_wait_count > 0
    AND a.Table_Name NOT LIKE N'plan_%'
    AND a.Table_Name NOT LIKE N'sys%'
@@ -70,7 +70,7 @@ ORDER BY a.page_latch_wait_count DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck30
+SELECT * FROM dbo.tmpIndexCheck30
 ORDER BY page_latch_wait_count DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

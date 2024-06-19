@@ -32,8 +32,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck1') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck1
+IF OBJECT_ID('dbo.tmpIndexCheck1') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck1
 
 SELECT 'Check 1 - Check indexes with small number of rows per page' AS [Info],
        a.Database_Name,
@@ -139,11 +139,11 @@ SELECT 'Check 1 - Check indexes with small number of rows per page' AS [Info],
        a.page_latch_wait_in_ms,
        a.page_io_latch_wait_count,
        a.page_io_latch_wait_in_ms
-  INTO tempdb.dbo.tmpIndexCheck1
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck1
+  FROM dbo.Tab_GetIndexInfo a
  WHERE a.Number_Rows >= 100 /*Ignoring small tables*/
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck1
+SELECT * FROM dbo.tmpIndexCheck1
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

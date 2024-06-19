@@ -32,8 +32,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck36') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck36
+IF OBJECT_ID('dbo.tmpIndexCheck36') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck36
 
 
 IF OBJECT_ID('tempdb.dbo.#TMP1') IS NOT NULL
@@ -57,7 +57,7 @@ SELECT TOP 1000
        UpdateStatsCmd = N'DBCC SHOW_STATISTICS (''' + QUOTENAME(a.Database_Name) + '.' + QUOTENAME(a.Schema_Name) + N'.' + QUOTENAME(a.Table_Name) + N''', '+ QUOTENAME(a.Index_Name) +') WITH NO_INFOMSGS;',
        CONVERT(VARCHAR(200),NULL) AS LeadingType
   INTO #TMP1
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  FROM dbo.Tab_GetIndexInfo a
  --WHERE a.Number_Rows >= 10000000
 ORDER BY a.Number_Rows DESC, 
          a.Database_Name,
@@ -129,11 +129,11 @@ BEGIN CATCH
 END CATCH;
 
 SELECT *
-INTO tempdb.dbo.tmpIndexCheck36
+INTO dbo.tmpIndexCheck36
 FROM #TMP1
 WHERE LeadingType = 'Ascending'
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck36
+SELECT * FROM dbo.tmpIndexCheck36
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

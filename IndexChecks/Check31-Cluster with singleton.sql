@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck31') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck31
+IF OBJECT_ID('dbo.tmpIndexCheck31') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck31
 
 SELECT TOP 1000
        'Check31 - Most accessed indexes and number of singleton lookups and range scans' AS [Info],
@@ -50,8 +50,8 @@ SELECT TOP 1000
        a.user_scans,
        a.user_lookups,
        a.Number_of_Reads
-  INTO tempdb.dbo.tmpIndexCheck31
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck31
+  FROM dbo.Tab_GetIndexInfo a
    CROSS APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN (singleton_lookup_count) = 0 THEN 0 ELSE CONVERT(REAL, (singleton_lookup_count)) * 100 /
               		       CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab1(singleton_lookup_ratio)
    CROSS APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN range_scan_count = 0 THEN 0 ELSE CONVERT(REAL, range_scan_count) * 100 /
@@ -64,7 +64,7 @@ ORDER BY a.Number_of_Reads DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck31
+SELECT * FROM dbo.tmpIndexCheck31
 ORDER BY current_number_of_rows_table DESC, 
          Index_Type,
          Database_Name,

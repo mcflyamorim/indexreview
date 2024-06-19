@@ -33,8 +33,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck35') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck35
+IF OBJECT_ID('dbo.tmpIndexCheck35') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck35
 
 SELECT TOP 1000
        'Check35 - Indexes that are not compressed' AS [Info],
@@ -59,8 +59,8 @@ SELECT TOP 1000
        a.TableHasLOB,
        a.large_value_types_out_of_row,
        a.data_compression_desc
-  INTO tempdb.dbo.tmpIndexCheck35
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck35
+  FROM dbo.Tab_GetIndexInfo a
  WHERE a.data_compression_desc LIKE '%NONE%'
 ORDER BY Number_Rows DESC, 
          Database_Name,
@@ -68,7 +68,7 @@ ORDER BY Number_Rows DESC,
          Table_Name,
          Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck35
+SELECT * FROM dbo.tmpIndexCheck35
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

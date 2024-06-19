@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck29') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck29
+IF OBJECT_ID('dbo.tmpIndexCheck29') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck29
 
 SELECT TOP 1000
        'Check29 - Tables with more indexes' AS [Info],
@@ -42,8 +42,8 @@ SELECT TOP 1000
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
        a.Number_Of_Indexes_On_Table
-  INTO tempdb.dbo.tmpIndexCheck29
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck29
+  FROM dbo.Tab_GetIndexInfo a
 ORDER BY a.Number_Of_Indexes_On_Table DESC,
          a.Number_Rows DESC, 
          a.Database_Name,
@@ -52,7 +52,7 @@ ORDER BY a.Number_Of_Indexes_On_Table DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck29
+SELECT * FROM dbo.tmpIndexCheck29
 ORDER BY Number_Of_Indexes_On_Table DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

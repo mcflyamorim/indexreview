@@ -26,8 +26,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck33') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck33
+IF OBJECT_ID('dbo.tmpIndexCheck33') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck33
 
 SELECT 'Check33 - Row/Page lock disabled' AS [Info],
        a.Database_Name,
@@ -40,12 +40,12 @@ SELECT 'Check33 - Row/Page lock disabled' AS [Info],
        a.ReservedSizeInMB AS [Table Size],
        a.allow_row_locks,
        a.allow_page_locks
-  INTO tempdb.dbo.tmpIndexCheck33
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck33
+  FROM dbo.Tab_GetIndexInfo a
  WHERE (a.allow_row_locks = 0 OR a.allow_page_locks = 0)
    AND a.Index_Type NOT IN ('CLUSTERED COLUMNSTORE', 'NONCLUSTERED COLUMNSTORE')
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck33
+SELECT * FROM dbo.tmpIndexCheck33
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

@@ -26,8 +26,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck32') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck32
+IF OBJECT_ID('dbo.tmpIndexCheck32') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck32
  
 SELECT TOP 1000
        'Check32 - Index with size greater than table' AS [Info],
@@ -44,9 +44,9 @@ SELECT TOP 1000
          WHEN CONVERT(NUMERIC(25, 2), a.ReservedSizeInMB / 1024.) < CONVERT(NUMERIC(25, 2), ISNULL(t.[Total Index Size],0) / 1024.) THEN 'Warning - Total index size is greater than the table size.'
          ELSE 'OK'
        END AS [Comment]
-  INTO tempdb.dbo.tmpIndexCheck32
-  FROM tempdb.dbo.Tab_GetIndexInfo a
-  OUTER APPLY (SELECT SUM(ReservedSizeInMB) FROM tempdb.dbo.Tab_GetIndexInfo b 
+  INTO dbo.tmpIndexCheck32
+  FROM dbo.Tab_GetIndexInfo a
+  OUTER APPLY (SELECT SUM(ReservedSizeInMB) FROM dbo.Tab_GetIndexInfo b 
                 WHERE a.Database_Name = b.Database_Name
                   AND a.Object_ID = b.Object_ID
                   AND b.Index_Type NOT IN ('HEAP', 'CLUSTERED', 'CLUSTERED COLUMNSTORE')) AS t ([Total Index Size])
@@ -57,7 +57,7 @@ ORDER BY a.ReservedSizeInMB DESC,
          a.Table_Name,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck32
+SELECT * FROM dbo.tmpIndexCheck32
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

@@ -21,14 +21,14 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck44') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck44
+IF OBJECT_ID('dbo.tmpIndexCheck44') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck44
 
 SELECT TOP 10000
        'Check 44 - Report detailed information about plan cache' AS [Info],
        *
-INTO tempdb.dbo.tmpIndexCheck44
-FROM tempdb.dbo.tmpIndexCheckCachePlanData
+INTO dbo.tmpIndexCheck44
+FROM dbo.tmpIndexCheckCachePlanData
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck44
+SELECT * FROM dbo.tmpIndexCheck44
 ORDER BY query_impact DESC

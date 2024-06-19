@@ -46,8 +46,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck15') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck15
+IF OBJECT_ID('dbo.tmpIndexCheck15') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck15
 
 SELECT 'Check 15 - Clustered Indexes with GUIDs in key' AS [Info],
         a.Database_Name,
@@ -67,11 +67,11 @@ SELECT 'Check 15 - Clustered Indexes with GUIDs in key' AS [Info],
             ELSE
                 'OK'
         END AS [Comment]
-   INTO tempdb.dbo.tmpIndexCheck15
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck15
+   FROM dbo.Tab_GetIndexInfo AS a
   WHERE [Key_has_GUID] > 0
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck15
+SELECT * FROM dbo.tmpIndexCheck15
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

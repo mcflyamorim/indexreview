@@ -58,21 +58,21 @@ DECLARE @fill_factor				INT	= 100	/* If not NULL, will add a fill factor option 
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
 
-IF OBJECT_ID ('tempdb.dbo.Monitoring_Log') IS NULL
+IF OBJECT_ID ('dbo.tmpIndexCheckMonitoring_Log') IS NULL
 BEGIN
-  CREATE TABLE tempdb.dbo.Monitoring_Log (RowID INT IDENTITY(1, 1) PRIMARY KEY, Dt DATETIME DEFAULT GETDATE(), cStatus VARCHAR(MAX))
+  CREATE TABLE dbo.tmpIndexCheckMonitoring_Log (RowID INT IDENTITY(1, 1) PRIMARY KEY, Dt DATETIME DEFAULT GETDATE(), cStatus VARCHAR(MAX))
 END
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck45
+IF OBJECT_ID('dbo.tmpIndexCheck45') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck45
 
 IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
   DROP TABLE #tmp1
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult;
+IF OBJECT_ID('dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck45_CompressionResult;
 
-CREATE TABLE tempdb.dbo.tmpIndexCheck45_CompressionResult
+CREATE TABLE dbo.tmpIndexCheck45_CompressionResult
 (
   [database_name]                                      sysname,
   [object_name]                                        sysname,
@@ -107,73 +107,34 @@ IF @database_name_filter = ''
   SET @database_name_filter = NULL
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run script.'
-RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
 IF OBJECT_ID('tempdb.dbo.#db') IS NOT NULL
   DROP TABLE #db;
 
 CREATE TABLE #db ([name] sysname)
 
-/* If this is SQL2012+, check AG status */
-IF (@sqlmajorver >= 11 /*SQL2012*/)
-BEGIN    
-  BEGIN TRY
-    INSERT INTO #db
-    SELECT d1.[name] 
-    FROM sys.databases d1
-    LEFT JOIN sys.dm_hadr_availability_replica_states hars
-    ON d1.replica_id = hars.replica_id
-    LEFT JOIN sys.availability_replicas ar
-    ON d1.replica_id = ar.replica_id
-    WHERE 1=1
-    AND d1.[name] = ISNULL(@database_name_filter, d1.[name])
-    AND d1.[name] IN (SELECT DISTINCT Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)
-    /* I'm not interested to read DBs that are not online :-) */
-    AND d1.state_desc = 'ONLINE'
-    /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
-    AND d1.is_read_only = 0 
-    /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-    AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
-    /* If DB is part of AG, check only DBs that allow connections */
-    AND (  
-         (hars.role_desc = 'PRIMARY' OR hars.role_desc IS NULL)
-         OR 
-         (hars.role_desc = 'SECONDARY' AND ar.secondary_role_allow_connections_desc IN ('READ_ONLY','ALL'))
-        )
-		END TRY
-		BEGIN CATCH
-			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
-    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
-    SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
-    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
-    RETURN
-		END CATCH
-END
-/* SQL2008R2 doesn't have AG, so, ignoring the AG DMVs */
-ELSE IF (@sqlmajorver <= 10 /*SQL2008R2*/)
-BEGIN    
-  BEGIN TRY
-    INSERT INTO #db
-    SELECT d1.[name] 
-    FROM sys.databases d1
-    WHERE 1=1
-    AND d1.[name] = ISNULL(@database_name_filter, d1.[name])
-    AND d1.[name] IN (SELECT DISTINCT Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)
-    /* I'm not interested to read DBs that are not online :-) */
-    AND d1.state_desc = 'ONLINE'
-    /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
-    AND d1.is_read_only = 0 
-    /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-    AND d1.name NOT IN ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
-		END TRY
-		BEGIN CATCH
-			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
-    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
-    SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
-    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
-    RETURN
-		END CATCH
-END
+BEGIN TRY
+  INSERT INTO #db
+  SELECT d1.[name] 
+  FROM sys.databases d1
+  WHERE 1=1
+  AND d1.[name] = ISNULL(@database_name_filter, d1.[name])
+  AND d1.[name] IN (SELECT DISTINCT Database_Name FROM dbo.Tab_GetIndexInfo)
+  /* I'm not interested to read DBs that are not online :-) */
+  AND d1.state_desc = 'ONLINE'
+  /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
+  AND d1.is_read_only = 0 
+  /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
+  AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+END TRY
+BEGIN CATCH
+		SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
+  RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
+  SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
+  RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
+  RETURN
+END CATCH
 
 DECLARE @SQL NVARCHAR(MAX)
 DECLARE @Database_Name sysname
@@ -187,7 +148,7 @@ INTO @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
   SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Removing sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
   SET @sp_executesql = QUOTENAME(@Database_Name) + N'.sys.sp_executesql'
 
@@ -202,12 +163,12 @@ BEGIN
   BEGIN TRY
     EXECUTE @sp_executesql @stmt = @SQL
     SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-    RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
   END TRY
   BEGIN CATCH
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     FETCH NEXT FROM c_databases
     INTO @Database_Name
@@ -241,7 +202,7 @@ BEGIN
 
   DECLARE @status_msg VARCHAR(MAX) = '''';
 
-  IF (SERVERPROPERTY(''EngineEdition'') NOT IN (2 /* Standard */, 3 /* Enterprise */, 4 /* Express */, 8 /*Cloud Lifter */))
+  IF (SERVERPROPERTY(''EngineEdition'') NOT IN (2 /* Standard */, 3 /* Enterprise */, 4 /* Express */, 5 /* SQL Database */, 8 /* Azure SQL Managed Instance */))
   BEGIN
     DECLARE @procName sysname = N''sp_estimate_data_compression_savings_v2'';
     DECLARE @procNameLen INT = DATALENGTH(@procName);
@@ -1286,7 +1247,7 @@ BEGIN
                        + QUOTENAME(@schema_name) + ''.'' + QUOTENAME(@object_name) + ''(RowCount = ''
                        + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, @row_count), 1), ''.00'', '''')
                        + '' | BaseTableSize = '' + CONVERT(VARCHAR(30), @table_size) + ''mb)'';
-  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
   RAISERROR(
     ''------------------------------------------------------------------------------------------------------------------------------------------------'',
     0,
@@ -1296,7 +1257,7 @@ BEGIN
   BEGIN
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                          + ''Specified table partition is empty. Skipping this table'';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
     RETURN;
   END;
 
@@ -1306,7 +1267,7 @@ BEGIN
                          + CONVERT(VARCHAR(30), @max_mb_to_sample)
                          + ''mb) parameter is bigger then base table size, @max_mb_to_sample will be set to ''
                          + CONVERT(VARCHAR(30), @table_size) + ''mb'';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     SET @max_mb_to_sample = @table_size;
     IF @batch_sample_size_mb > @max_mb_to_sample
@@ -1599,7 +1560,7 @@ BEGIN
       0) WITH NOWAIT;
 
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Starting to populate table sample - '' + @fqn + (''(partition_number = '' + CONVERT(VARCHAR(30), @curr_partition_number) + '')'');
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     -- Step 1. Create the sample table in current scope
     -- 
@@ -1643,7 +1604,7 @@ BEGIN
                          + ''Populating table sample, current table size = 0'' + ''mb (target = ''
                          + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                          + ''insert_dll = '' + @insert_ddl;
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     -- @insert_ddl
     EXEC (@insert_ddl);
@@ -1656,7 +1617,7 @@ BEGIN
                          + ''Populating table sample, current table size = '' + CONVERT(VARCHAR(30), @current_size_batch)
                          + ''mb (target = '' + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                          + ''insert_dll = '' + @insert_ddl;
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     IF @sample_percent = 100.00
        OR @max_mb_to_sample = @batch_sample_size_mb
@@ -1680,7 +1641,7 @@ BEGIN
                            + CONVERT(VARCHAR(30), @current_size_batch) + ''mb (target = ''
                            + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                            + ''insert_dll = '' + @insert_ddl;
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       -- Break if we hit the max_mb_to_sample limit size
       IF @current_size_batch >= @max_mb_to_sample
@@ -1690,7 +1651,7 @@ BEGIN
     END;
 
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to populate table sample - '' + @fqn + (''(partition_number = '' + CONVERT(VARCHAR(30), @curr_partition_number) + '')'');
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     --
     -- Step 3.   Inner Loop:
@@ -1811,7 +1772,7 @@ BEGIN
       SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Starting to apply ''
                            + @desired_compression_desc + '' compression on index '' + QUOTENAME(@index_name) + ''(''
                            + QUOTENAME(DB_NAME()) + ''.'' + QUOTENAME(@schema_name) + ''.'' + QUOTENAME(@object_name) + '')'';
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       IF @v_control_current_index_creation = 1
       --AND ((@curr_index_id = 0 AND @current_compression_desc <> ''NONE'') OR (@curr_index_id <> 0))
@@ -1824,7 +1785,7 @@ BEGIN
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Creating current index on sample table, '' + ''create_current_index_ddl = ''
                                + @create_current_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           EXEC (@create_current_index_ddl);
 
           SET @sample_index_id = (SELECT TOP 1
@@ -1844,13 +1805,13 @@ BEGIN
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Error while trying to create current index on sample table. Skipping this index. ''
                                + ''create_current_index_ddl = '' + @create_current_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           SET @estimation_status = N''Error - Error while trying to create current index on sample table. Skipping this index. ''
                                    + N''create_current_index_ddl = '' + @create_current_index_ddl + CHAR(13) + CHAR(10)
                                    + N''; Error: '' + ERROR_MESSAGE();
 
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END CATCH;
       END;
 
@@ -1865,7 +1826,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Desired compression is same as current compression, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Desired compression is same as current compression, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1878,7 +1839,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''COMPRESS function is only available on SQL2016+, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - COMPRESS function is only available on SQL2016+, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1891,7 +1852,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''COLUMNSTORE_ARCHIVE compression is only available on SQL2014+, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - COLUMNSTORE_ARCHIVE compression is only available on SQL2014+, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1904,7 +1865,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Clustered ColumnStore index is only available on SQL2014+, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Clustered ColumnStore index is only available on SQL2014+, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1917,7 +1878,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Nonclustered ColumnStore index is only available on SQL2012+, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Nonclustered ColumnStore index is only available on SQL2012+, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1931,7 +1892,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Filtered Nonclustered ColumnStore index is only available on SQL2016+, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Filtered Nonclustered ColumnStore index is only available on SQL2016+, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1960,7 +1921,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Table has columns using unsupported data type for ColumnStore, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Table has columns using unsupported data type for ColumnStore, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1979,7 +1940,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Table has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Table has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -2000,7 +1961,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Index has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N''Skipped - Index has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -2012,7 +1973,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                              + ''Compress only applies for HEAP and Clustered indexes, skipping this test.'';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @sample_compressed_desired = 0;
         SET @estimation_status = N''Skipped - Compress only applies for HEAP and Clustered indexes, skipping this test.'';
         GOTO MOVENEXT;
@@ -2046,7 +2007,7 @@ BEGIN
           BEGIN
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                  + ''Table doesn''''t have columns elegible for COMPRESS, skipping this test.'';
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             SET @estimation_status = N''Skipped - Table doesn''''t have columns elegible for COMPRESS, skipping this test.'';
             SET @sample_compressed_desired = 0;
             GOTO MOVENEXT;
@@ -2074,7 +2035,7 @@ BEGIN
 
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Populating table sample using compress function, '' + ''insert_ddl = '' + @insert_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
           EXEC (@insert_ddl);
 
@@ -2089,19 +2050,19 @@ BEGIN
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Finished to populate table sample using compress function, current table size = ''
                                + CONVERT(VARCHAR(30), @current_size_batch) + ''mb.'';
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END TRY
         BEGIN CATCH
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Error while trying to apply COMPRESS on sample table. Skipping this index. ''
                                + ''insert_ddl = '' + @insert_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           SET @estimation_status = N''Error - Error while trying to apply COMPRESS on sample table. Skipping this index. ''
                                    + N''insert_ddl = '' + @insert_ddl + CHAR(13) + CHAR(10) + N''; Error: ''
                                    + ERROR_MESSAGE();
 
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END CATCH;
 
         SELECT @sample_compressed_desired = [used_page_count]
@@ -2136,7 +2097,7 @@ BEGIN
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                    + ''Running command to drop desired index on sample table. ''
                                    + ''drop_desired_index_ddl = '' + @drop_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
               EXEC (@drop_desired_index_ddl);
             END TRY
@@ -2144,16 +2105,16 @@ BEGIN
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                    + ''Error while trying to drop desired index on sample table. ''
                                    + ''drop_desired_index_ddl = '' + @drop_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             END CATCH;
           END;
 
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                + ''Creating desired index on sample table, '' + ''create_desired_index_ddl = ''
                                + @create_desired_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
           EXEC (@create_desired_index_ddl);
 
@@ -2179,7 +2140,7 @@ BEGIN
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                    + ''Index doesn''''t exist, re-executing command without drop_existing=on, ''
                                    + ''create_desired_index_ddl = '' + @create_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
               EXEC (@create_desired_index_ddl);
 
@@ -2199,12 +2160,12 @@ BEGIN
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                    + ''Error while trying to re-execute command to create desired compression index on sample table. Skipping this index. ''
                                    + ''create_desired_index_ddl = '' + @create_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
               SET @estimation_status = +N''Error - Error while trying to re-execute command to create desired compression index on sample table. Skipping this index. ''
                                        + N''create_desired_index_ddl = '' + @create_desired_index_ddl + CHAR(13)
                                        + CHAR(10) + N''; Error: '' + ERROR_MESSAGE();;
               SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             END CATCH;
           END;
           ELSE
@@ -2212,10 +2173,10 @@ BEGIN
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                  + ''Error while trying to create desired compression index on sample table. Skipping this index. ''
                                  + ''create_desired_index_ddl = '' + @create_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           END;
         END CATCH;
 
@@ -2250,7 +2211,7 @@ BEGIN
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                  + ''Running command to drop desired index on sample table. ''
                                  + ''drop_desired_index_ddl = '' + @drop_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
             EXEC (@drop_desired_index_ddl);
             SET @require_drop_desired_index = 0;
@@ -2259,13 +2220,13 @@ BEGIN
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
                                  + ''Error while trying to drop desired index on sample table. Skipping this index. ''
                                  + ''drop_desired_index_ddl = '' + @drop_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             SET @estimation_status = N''Error - Error while trying to drop desired index on sample table. Skipping this index. ''
                                      + N''drop_desired_index_ddl = '' + @drop_desired_index_ddl + CHAR(13) + CHAR(10)
                                      + N''; Error: '' + ERROR_MESSAGE();;
 
             SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error: '' + ERROR_MESSAGE();
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           END CATCH;
         END;
       END;
@@ -2373,14 +2334,14 @@ BEGIN
                              + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_current * 8) + ''kb'', ''NA'')
                              + '', Compressed size = ''
                              + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_desired * 8) + ''kb'', ''NA'');
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
       END;
 
 
       SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to apply ''
                            + @desired_compression_desc + '' compression on index '' + QUOTENAME(@index_name) + ''(''
                            + QUOTENAME(DB_NAME()) + ''.'' + QUOTENAME(@schema_name) + ''.'' + QUOTENAME(@object_name) + '')'';
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       FETCH NEXT FROM [index_partition_cursor]
       INTO @curr_index_id,
@@ -2439,9 +2400,9 @@ BEGIN
   CLOSE [c];
   DEALLOCATE [c];
 
-  IF OBJECT_ID(''tempdb.dbo.tmpIndexCheck45_CompressionResult'') IS NOT NULL
+  IF OBJECT_ID(''dbo.tmpIndexCheck45_CompressionResult'') IS NOT NULL
   BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck45_CompressionResult
+    INSERT INTO dbo.tmpIndexCheck45_CompressionResult
     SELECT *
     FROM [#estimated_results]
     WHERE estimated_data_compression IN (SELECT col_data_compression FROM #tmp_data_compression);
@@ -2466,7 +2427,7 @@ BEGIN
                        + QUOTENAME(@schema_name) + ''.'' + QUOTENAME(@object_name) + ''(RowCount = ''
                        + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, @row_count), 1), ''.00'', '''')
                        + '' | BaseTableSize = '' + CONVERT(VARCHAR(30), @table_size) + ''mb)'';
-  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
   RAISERROR(
     ''------------------------------------------------------------------------------------------------------------------------------------------------'',
     0,
@@ -2493,17 +2454,17 @@ END;
   
   BEGIN TRY
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to create create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     EXECUTE @sp_executesql @stmt = @SQL
 
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to create create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
   END TRY
   BEGIN CATCH
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to create sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     FETCH NEXT FROM c_databases
     INTO @Database_Name
@@ -2555,7 +2516,7 @@ WHERE row_count >= @min_row_count /*Ignoring small tables*/
 AND reserved_size_mb >= @min_mb /*Ignoring small tables*/
 
 SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Number of tables to process: '' + CONVERT(VARCHAR(30), @table_count);
-RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
 DECLARE cCompress CURSOR FAST_FORWARD READ_ONLY FOR
 SELECT schema_name,
@@ -2583,7 +2544,7 @@ BEGIN
                          + CONVERT(VARCHAR(30), @table_count) + '' - Working on '' + QUOTENAME(@schema_name) + ''.''
                          + QUOTENAME(@object_name) + ''(RowCount = ''
                          + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, @row_count), 1), ''.00'', '''') + '')'';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     SET @cmd = ''EXEC dbo.sp_estimate_data_compression_savings_v2
                        @schema_name = '''''' + @schema_name + '''''',
@@ -2596,7 +2557,7 @@ BEGIN
   BEGIN CATCH
     SET @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error processing ObjectName = ''
                       + @object_name + '' - skipping this object. ErrMsg = '' + ERROR_MESSAGE();
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@status_msg);
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
   END CATCH;
 
   FETCH cCompress
@@ -2612,17 +2573,17 @@ DEALLOCATE cCompress;
 
   BEGIN TRY
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     EXECUTE @sp_executesql @stmt = @SQL
 
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + ']'
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
   END TRY
   BEGIN CATCH
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to run sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     FETCH NEXT FROM c_databases
     INTO @Database_Name
@@ -2643,7 +2604,7 @@ DEALLOCATE cCompress;
   BEGIN CATCH
     SET @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error while trying to remove sp_estimate_data_compression_savings_v2 on DB [' + @Database_Name + '] '
                       + 'ErrMsg = ' + ERROR_MESSAGE();
-    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+    RAISERROR(@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
     FETCH NEXT FROM c_databases
     INTO @Database_Name
@@ -2657,7 +2618,7 @@ CLOSE c_databases
 DEALLOCATE c_databases
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run script.'
-RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
 DECLARE @rebuild_options VARCHAR(MAX) = ''
 SET @rebuild_options = @rebuild_options + ', PAD_INDEX = ON'
@@ -2740,18 +2701,18 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
                  '  BEGIN' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + '' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
-                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '    ALTER TABLE ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD WITH(DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')' + NCHAR(13) + NCHAR(10) + 
                  '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + '' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
-                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg); ' + NCHAR(13) + NCHAR(10) +
+                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg); ' + NCHAR(13) + NCHAR(10) +
                  '  END; ' + NCHAR(13) + NCHAR(10) +
                  'END TRY' + NCHAR(13) + NCHAR(10) +
                  'BEGIN CATCH' + NCHAR(13) + NCHAR(10) +
                  '  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error trying to run rebuild.''' + NCHAR(13) + NCHAR(10) +
-                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '  SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Error_Message: '' + ERROR_MESSAGE()' + NCHAR(13) + NCHAR(10) +
-                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg); ' + NCHAR(13) + NCHAR(10) +
+                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg); ' + NCHAR(13) + NCHAR(10) +
                  'END CATCH' + NCHAR(13) + NCHAR(10) +
                  'GO' + NCHAR(13) + NCHAR(10) + NCHAR(13) + NCHAR(10)
              ELSE ''
@@ -2768,26 +2729,26 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
                  '  BEGIN' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + '' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
-                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '    ALTER INDEX ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') +' ON ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD PARTITION = ' + CASE WHEN a.IsIndexPartitioned = 1 THEN CONVERT(VARCHAR(30), t1.partition_number) ELSE 'ALL' END + ' WITH(DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')' + NCHAR(13) + NCHAR(10) + 
                  '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + '' + NCHAR(13) + NCHAR(10) +
                  '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
-                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '  END; ' + NCHAR(13) + NCHAR(10) +
                  'END TRY' + NCHAR(13) + NCHAR(10) +
                  'BEGIN CATCH' + NCHAR(13) + NCHAR(10) +
                  '  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error trying to run rebuild.''' + NCHAR(13) + NCHAR(10) +
-                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '  SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Error_Message: '' + ERROR_MESSAGE()' + NCHAR(13) + NCHAR(10) +
-                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO tempdb.dbo.Monitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
+                 '  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  'END CATCH' + NCHAR(13) + NCHAR(10) +
                  'GO' + NCHAR(13) + NCHAR(10) + NCHAR(13) + NCHAR(10)
              ELSE ''
            END
        END AS SqlToCompress
 INTO #tmp1
-FROM tempdb.dbo.tmpIndexCheck45_CompressionResult AS t1
-LEFT OUTER JOIN tempdb.dbo.Tab_GetIndexInfo a
+FROM dbo.tmpIndexCheck45_CompressionResult AS t1
+LEFT OUTER JOIN dbo.Tab_GetIndexInfo a
 ON a.Database_Name = t1.database_name
 AND a.Schema_Name = t1.schema_name
 AND a.Table_Name = t1.object_name
@@ -2818,7 +2779,7 @@ t1.page_compression_ratio,
 t1.columstore_compression_ratio,
 t1.columstore_archive_compression_ratio,
 t1.compress_compression_ratio
-INTO tempdb.dbo.tmpIndexCheck45
+INTO dbo.tmpIndexCheck45
 FROM #tmp1
 CROSS APPLY (
   SELECT SUM(CASE WHEN a.estimated_data_compression = 'NONE' THEN a.compression_ratio END) AS none_compression_ratio,
@@ -2836,9 +2797,9 @@ CROSS APPLY (
 ) AS t1
 
 
-ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD CompressionOrderWeight INT NOT NULL DEFAULT 0
-ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD CompressionOrder INT NOT NULL DEFAULT 0
-ALTER TABLE tempdb.dbo.tmpIndexCheck45 ADD IsRecommendedAlgorithm INT NOT NULL DEFAULT 0
+ALTER TABLE dbo.tmpIndexCheck45 ADD CompressionOrderWeight INT NOT NULL DEFAULT 0
+ALTER TABLE dbo.tmpIndexCheck45 ADD CompressionOrder INT NOT NULL DEFAULT 0
+ALTER TABLE dbo.tmpIndexCheck45 ADD IsRecommendedAlgorithm INT NOT NULL DEFAULT 0
 
 
 /* Define initial order based on buffer pool usage, index size and compression ratio. */
@@ -2861,7 +2822,7 @@ AS
                                       WHEN 'COLUMNSTORE_ARCHIVE' THEN 4
                                       WHEN 'COMPRESS' THEN 5
                                     END) AS rn
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 )
 UPDATE CTE_1 SET CompressionOrder = rn
 
@@ -2871,11 +2832,11 @@ UPDATE CTE_1 SET CompressionOrder = rn
    as it is probably better to leave it as NONE to avoid
    extra overhead for a little gain */
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+UPDATE dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
 WHERE current_data_compression <> 'NONE'
 AND estimated_data_compression = 'NONE'
 AND compression_ratio BETWEEN -3 AND 3
-AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+AND NOT EXISTS(SELECT * FROM dbo.tmpIndexCheck45 AS a 
                WHERE a.database_name = tmpIndexCheck45.database_name
                AND a.object_name = tmpIndexCheck45.object_name
                AND a.schema_name = tmpIndexCheck45.schema_name
@@ -2889,11 +2850,11 @@ AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a
    as it is probably better to leave it as ROW to avoid
    extra overhead for a little gain compared to PAGE */
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+UPDATE dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
 WHERE current_data_compression = 'PAGE'
 AND estimated_data_compression = 'ROW'
 AND compression_ratio BETWEEN -3 AND 3
-AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+AND NOT EXISTS(SELECT * FROM dbo.tmpIndexCheck45 AS a 
                WHERE a.database_name = tmpIndexCheck45.database_name
                AND a.object_name = tmpIndexCheck45.object_name
                AND a.schema_name = tmpIndexCheck45.schema_name
@@ -2907,12 +2868,12 @@ AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a
 DECLARE @DiffToPreferRow INT = 10
 DECLARE @MinRowCompressionRatio INT = 10
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+UPDATE dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
 WHERE estimated_data_compression = 'ROW'
 AND page_compression_ratio - row_compression_ratio <= @DiffToPreferRow
 AND IsRecommendedAlgorithm = 0
 AND compression_ratio >= @MinRowCompressionRatio
-AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+AND NOT EXISTS(SELECT * FROM dbo.tmpIndexCheck45 AS a 
                WHERE a.database_name = tmpIndexCheck45.database_name
                AND a.object_name = tmpIndexCheck45.object_name
                AND a.schema_name = tmpIndexCheck45.schema_name
@@ -2924,10 +2885,10 @@ AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a
    set preferable compression algorithm to PAGE */
 DECLARE @MinPageCompressionRatio INT = 25
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
+UPDATE dbo.tmpIndexCheck45 SET IsRecommendedAlgorithm = 1
 WHERE estimated_data_compression = 'PAGE'
 AND compression_ratio >= @MinPageCompressionRatio
-AND NOT EXISTS(SELECT * FROM tempdb.dbo.tmpIndexCheck45 AS a 
+AND NOT EXISTS(SELECT * FROM dbo.tmpIndexCheck45 AS a 
                WHERE a.database_name = tmpIndexCheck45.database_name
                AND a.object_name = tmpIndexCheck45.object_name
                AND a.schema_name = tmpIndexCheck45.schema_name
@@ -2943,7 +2904,7 @@ DECLARE @PercentOfMemoryToIdentifyBigTables INT = 5
 ;WITH CTE_1
 AS
 (
-SELECT * FROM tempdb.dbo.tmpIndexCheck45
+SELECT * FROM dbo.tmpIndexCheck45
 WHERE ([size_with_current_compression_setting(KB)] / 1024.) >= (SELECT (CONVERT(NUMERIC(18, 2), SUM(pages_kb) / 1024.)  * @PercentOfMemoryToIdentifyBigTables) / 100  AS PercentOfBpSizeMB
                                                                 FROM sys.dm_os_memory_clerks
                                                                 WHERE [type] = 'MEMORYCLERK_SQLBUFFERPOOL')
@@ -2954,14 +2915,14 @@ UPDATE CTE_1 SET CompressionOrderWeight = CompressionOrderWeight + 1
    The idea is to favor compression on tables with a high number of reads compared to writes. */
 DECLARE @HighPercentOfReads INT = 40
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+UPDATE dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
 WHERE reads_ratio >= @HighPercentOfReads
 
 
 /* Indexes with a high percent (default of 40%) of writes compared to reads will get a -1 weight on final formula.
    The idea is to disfavor compression on tables with a high number of writes compared to reads. */
 DECLARE @HighPercentOfWrites INT = 40
-UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight - 1
+UPDATE dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight - 1
 WHERE writes_ratio >= @HighPercentOfWrites
 
 /* Indexes with high waits (default of TOP 500 indexes by page IO latch) on page IO latch will get an extra weight on final formula.
@@ -2973,10 +2934,10 @@ IF OBJECT_ID('tempdb.dbo.#tmp_top_pageio_latch') IS NOT NULL
 
 SELECT TOP (@TopNPageIOLatch) database_name, object_name, schema_name, index_name 
 INTO #tmp_top_pageio_latch
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 ORDER BY page_io_latch_wait_count DESC
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+UPDATE dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
 WHERE EXISTS(SELECT * FROM #tmp_top_pageio_latch AS a 
              WHERE a.database_name = tmpIndexCheck45.database_name
              AND a.object_name = tmpIndexCheck45.object_name
@@ -3003,10 +2964,10 @@ IF OBJECT_ID('tempdb.dbo.#tmp_top_bp') IS NOT NULL
 
 SELECT TOP (@TopNBufferPool) database_name, object_name, schema_name, index_name 
 INTO #tmp_top_bp
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 ORDER BY buffer_pool_spaceused_mb DESC
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+UPDATE dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
 WHERE EXISTS(SELECT * FROM #tmp_top_bp AS a 
              WHERE a.database_name = tmpIndexCheck45.database_name
              AND a.object_name = tmpIndexCheck45.object_name
@@ -3021,10 +2982,10 @@ IF OBJECT_ID('tempdb.dbo.#tmp_most_used') IS NOT NULL
 
 SELECT TOP (@TopNMostUsedIndexes) database_name, object_name, schema_name, index_name 
 INTO #tmp_most_used
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 ORDER BY avg_of_access_per_minute_based_on_index_usage_dmv DESC
 
-UPDATE tempdb.dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
+UPDATE dbo.tmpIndexCheck45 SET CompressionOrderWeight = CompressionOrderWeight + 1
 WHERE EXISTS(SELECT * FROM #tmp_most_used AS a 
              WHERE a.database_name = tmpIndexCheck45.database_name
              AND a.object_name = tmpIndexCheck45.object_name
@@ -3096,14 +3057,14 @@ SELECT Info,
        CompressionOrder,
        IsRecommendedAlgorithm,
        SqlToCompress
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 WHERE 1=1
 ORDER BY CompressionOrderWeight DESC, CompressionOrder ASC
 
 /*
 -- Return final script 
 SELECT SqlToCompress AS "text()"
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 WHERE 1=1
 AND IsRecommendedAlgorithm = 1
 ORDER BY CompressionOrderWeight DESC, CompressionOrder ASC

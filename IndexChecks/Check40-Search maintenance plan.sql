@@ -38,125 +38,121 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck40') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck40
+IF OBJECT_ID('dbo.tmpIndexCheck40') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck40
 
 DECLARE @dbid int, @dbname VARCHAR(MAX), @sqlcmd NVARCHAR(MAX)
 DECLARE @ErrorMessage NVARCHAR(MAX)
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1Check40'))
-DROP TABLE ##tmp1Check40;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmp1Check40'))
+IF OBJECT_ID('tempdb.dbo.##tmp1Check40') IS NOT NULL
+  DROP TABLE ##tmp1Check40;
+
 CREATE TABLE ##tmp1Check40 ([DBName] VARCHAR(MAX), [Schema] VARCHAR(MAX), [Object] VARCHAR(MAX), [Type] VARCHAR(MAX), [JobName] VARCHAR(MAX), [is_enabled] BIT, [Step] VARCHAR(MAX), CommandFound VARCHAR(MAX));
-		
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblKeywords'))
-DROP TABLE #tblKeywords;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblKeywords'))
-CREATE TABLE #tblKeywords (
-	KeywordID int IDENTITY(1,1) PRIMARY KEY,
-	Keyword VARCHAR(64) -- the keyword itself
-	);
 
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.indexes (NOLOCK) WHERE name = N'UI_Keywords' AND [object_id] = OBJECT_ID('tempdb.dbo.#tblKeywords'))
-CREATE UNIQUE INDEX UI_Keywords ON #tblKeywords(Keyword);
+DECLARE @AmazonRDS SMALLINT = CASE WHEN DB_ID('rdsadmin') IS NOT NULL AND SUSER_SNAME(0x01) = 'rdsa' THEN 1 ELSE 0 END
+DECLARE @SQLAzureDB SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 5 /* 5 = SQL Azure*/ THEN 1 ELSE 0 END
+DECLARE @SQLAzureManagedInstance SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 /*8 = Azure SQL Managed Instance*/ THEN 1 ELSE 0 END
 
-INSERT INTO #tblKeywords (Keyword)
-VALUES ('ALTER INDEX'), ('DBCC DBREINDEX'), ('REORGANIZE'), ('SHOWCONTIG'), ('INDEXDEFRAG')
-
-IF EXISTS
-(
-   SELECT [object_id]
-   FROM tempdb.sys.objects (NOLOCK)
-   WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
-   DROP TABLE #tmpdbs0;
-IF NOT EXISTS
-(
-   SELECT [object_id]
-   FROM tempdb.sys.objects (NOLOCK)
-   WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
-   CREATE TABLE #tmpdbs0
-   (
-       id INT IDENTITY(1, 1),
-       [dbid] INT,
-       [dbname] NVARCHAR(1000),
-       is_read_only BIT,
-       [state] TINYINT,
-       isdone BIT
-   );
-
-SET @sqlcmd
-   = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-               WHERE name <> ''tempdb'' and state_desc = ''ONLINE'' and is_read_only = 0';
-INSERT INTO #tmpdbs0
-(
-   [dbid],
-   [dbname],
-   is_read_only,
-   [state],
-   [isdone]
-)
-EXEC sp_executesql @sqlcmd;
-
-UPDATE #tmpdbs0
-SET isdone = 0;
-
-IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+/* Don't run it on AmazonRDS or Azure, as we don't have direct access to msdb jobs*/
+IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) = 0
 BEGIN
-	 WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
-	 BEGIN
-		  SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+  IF OBJECT_ID('tempdb.dbo.#tblKeywords') IS NOT NULL
+    DROP TABLE #tblKeywords;
 
-		  SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + '; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-                   SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, tk.Keyword
-                   FROM sys.sql_modules sm (NOLOCK)
-                   INNER JOIN sys.objects so (NOLOCK) ON sm.[object_id] = so.[object_id]
-                   INNER JOIN sys.schemas ss (NOLOCK) ON so.[schema_id] = ss.[schema_id]
-                   CROSS JOIN #tblKeywords tk (NOLOCK)
-                   WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 1
-                   AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
+  CREATE TABLE #tblKeywords (
+	  KeywordID int IDENTITY(1,1) PRIMARY KEY,
+	  Keyword VARCHAR(64) -- the keyword itself
+	  );
+  CREATE UNIQUE INDEX UI_Keywords ON #tblKeywords(Keyword);
 
-    BEGIN TRY
-	     INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], CommandFound)
-	     EXECUTE sp_executesql @sqlcmd
-    END TRY
-    BEGIN CATCH
-	     SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-	     SELECT @ErrorMessage = 'Error raised in TRY block. ' + ERROR_MESSAGE()
-	     RAISERROR (@ErrorMessage, 16, 1);
-    END CATCH
+  INSERT INTO #tblKeywords (Keyword)
+  VALUES ('ALTER INDEX'), ('DBCC DBREINDEX'), ('REORGANIZE'), ('SHOWCONTIG'), ('INDEXDEFRAG')
+
+  IF OBJECT_ID('tempdb.dbo.#tmpdbs0') IS NOT NULL
+    DROP TABLE #tmpdbs0;
+
+  CREATE TABLE #tmpdbs0
+  (
+      id INT IDENTITY(1, 1),
+      [dbid] INT,
+      [dbname] NVARCHAR(1000),
+      is_read_only BIT,
+      [state] TINYINT,
+      isdone BIT
+  );
+
+  SET @sqlcmd
+     = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
+                 WHERE name <> ''tempdb'' and state_desc = ''ONLINE'' and is_read_only = 0';
+  INSERT INTO #tmpdbs0
+  (
+     [dbid],
+     [dbname],
+     is_read_only,
+     [state],
+     [isdone]
+  )
+  EXEC sp_executesql @sqlcmd;
+
+  UPDATE #tmpdbs0
+  SET isdone = 0;
+
+  IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+  BEGIN
+	   WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+	   BEGIN
+		    SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+
+		    SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + '; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+                     SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, tk.Keyword
+                     FROM sys.sql_modules sm (NOLOCK)
+                     INNER JOIN sys.objects so (NOLOCK) ON sm.[object_id] = so.[object_id]
+                     INNER JOIN sys.schemas ss (NOLOCK) ON so.[schema_id] = ss.[schema_id]
+                     CROSS JOIN #tblKeywords tk (NOLOCK)
+                     WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 1
+                     AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
+
+      BEGIN TRY
+	       INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], CommandFound)
+	       EXECUTE sp_executesql @sqlcmd
+      END TRY
+      BEGIN CATCH
+	       SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+	       SELECT @ErrorMessage = 'Error raised in TRY block. ' + ERROR_MESSAGE()
+	       RAISERROR (@ErrorMessage, 16, 1);
+      END CATCH
 		
-		  UPDATE #tmpdbs0
-		  SET isdone = 1
-		  WHERE [dbid] = @dbid
-	 END
-END;
+		    UPDATE #tmpdbs0
+		    SET isdone = 1
+		    WHERE [dbid] = @dbid
+	   END
+  END;
 
-INSERT INTO #tblKeywords (Keyword)
-SELECT DISTINCT Object
-FROM ##tmp1Check40
+  INSERT INTO #tblKeywords (Keyword)
+  SELECT DISTINCT Object
+  FROM ##tmp1Check40
 
-SET @sqlcmd = 'USE [msdb]; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-               SELECT t.[DBName], t.[Schema], t.[Object], t.[Type], sj.[name], sj.[enabled], sjs.step_name, sjs.[command]
-               FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
-               INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
-               CROSS JOIN #tblKeywords tk (NOLOCK)
-               OUTER APPLY (SELECT TOP 1 * FROM ##tmp1Check40 WHERE ##tmp1Check40.[Object] = tk.Keyword) AS t
-               WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sjs.[command]) COLLATE DATABASE_DEFAULT) > 0
-               AND sjs.[subsystem] IN (''TSQL'',''PowerShell'', ''CMDEXEC'');'
+  SET @sqlcmd = 'USE [msdb]; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+                 SELECT t.[DBName], t.[Schema], t.[Object], t.[Type], sj.[name], sj.[enabled], sjs.step_name, sjs.[command]
+                 FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
+                 INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
+                 CROSS JOIN #tblKeywords tk (NOLOCK)
+                 OUTER APPLY (SELECT TOP 1 * FROM ##tmp1Check40 WHERE ##tmp1Check40.[Object] = tk.Keyword) AS t
+                 WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sjs.[command]) COLLATE DATABASE_DEFAULT) > 0
+                 AND sjs.[subsystem] IN (''TSQL'',''PowerShell'', ''CMDEXEC'');'
 
-BEGIN TRY
-	 INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], JobName, [is_enabled], Step, CommandFound)
-	 EXECUTE sp_executesql @sqlcmd
-END TRY
-BEGIN CATCH
-	 SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-	 SELECT @ErrorMessage = 'Error raised in jobs TRY block. ' + ERROR_MESSAGE()
-	 RAISERROR (@ErrorMessage, 16, 1);
-END CATCH
+  BEGIN TRY
+	   INSERT INTO ##tmp1Check40 ([DBName], [Schema], [Object], [Type], JobName, [is_enabled], Step, CommandFound)
+	   EXECUTE sp_executesql @sqlcmd
+  END TRY
+  BEGIN CATCH
+	   SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+	   SELECT @ErrorMessage = 'Error raised in jobs TRY block. ' + ERROR_MESSAGE()
+	   RAISERROR (@ErrorMessage, 16, 1);
+  END CATCH
+END
 
-CREATE TABLE tempdb.dbo.tmpIndexCheck40 (
+CREATE TABLE dbo.tmpIndexCheck40 (
            [Info] VARCHAR(800),
            DBName VARCHAR(800),
            [Schema] VARCHAR(800),
@@ -171,7 +167,7 @@ CREATE TABLE tempdb.dbo.tmpIndexCheck40 (
 
 IF (SELECT COUNT(*) FROM ##tmp1Check40) > 0
 BEGIN
-  INSERT INTO tempdb.dbo.tmpIndexCheck40
+  INSERT INTO dbo.tmpIndexCheck40
 		SELECT 'Check 40 - Search for an index maintenance plan' AS [Info],
          DBName,
          [Schema],
@@ -187,8 +183,8 @@ BEGIN
 END
 ELSE
 BEGIN
-  INSERT INTO tempdb.dbo.tmpIndexCheck40([Info], Comment)
+  INSERT INTO dbo.tmpIndexCheck40([Info], Comment)
 	 SELECT 'Check 40 - Search for an index maintenance plan' AS [Info],
          'Could not find a job or procedure running index defrag, check manually.'
 END;
-SELECT * FROM tempdb.dbo.tmpIndexCheck40
+SELECT * FROM dbo.tmpIndexCheck40

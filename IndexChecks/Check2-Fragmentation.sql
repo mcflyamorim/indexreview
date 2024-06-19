@@ -40,8 +40,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck2') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck2
+IF OBJECT_ID('dbo.tmpIndexCheck2') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck2
 
 SELECT 'Check 2 - Index fragmentation' AS [Info],
         a.Database_Name,
@@ -67,9 +67,9 @@ SELECT 'Check 2 - Index fragmentation' AS [Info],
           WHEN CONVERT(NUMERIC(18, 2), a.avg_fragmentation_in_percent) > 5 THEN 'Warning - This index is fragmented. It is recommended to remove fragmentation on a regular basis to maintain performance'
           ELSE 'OK'
         END AS [Comment 1]
- INTO tempdb.dbo.tmpIndexCheck2
- FROM tempdb.dbo.Tab_GetIndexInfo a
+ INTO dbo.tmpIndexCheck2
+ FROM dbo.Tab_GetIndexInfo a
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck2
+SELECT * FROM dbo.tmpIndexCheck2
  ORDER BY avg_fragmentation_in_percent DESC,
           ReservedSizeInMB DESC;

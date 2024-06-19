@@ -31,8 +31,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck3') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck3
+IF OBJECT_ID('dbo.tmpIndexCheck3') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck3
 
 SELECT 'Check 3 - Duplicated indexes' AS [Info],
        a.Database_Name,
@@ -53,7 +53,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
        a.last_datetime_obj_was_used,
        a.plan_cache_reference_count,
        CONVERT(XML, (STUFF((SELECT ', ' + QUOTENAME(b.Index_Name)
-                FROM tempdb.dbo.Tab_GetIndexInfo AS b 
+                FROM dbo.Tab_GetIndexInfo AS b 
                WHERE a.Database_ID = b.Database_ID 
                  AND a.Object_ID = b.Object_ID
                  AND a.Index_ID <> b.Index_ID
@@ -62,7 +62,7 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
                  AND ISNULL(a.filter_definition,'') = ISNULL(b.filter_definition,'')
               FOR XML PATH('')), 1, 2, ''))) AS Exact_Duplicated,
        CONVERT(XML, STUFF((SELECT ', ' + QUOTENAME(b.Index_Name)
-                FROM tempdb.dbo.Tab_GetIndexInfo AS b 
+                FROM dbo.Tab_GetIndexInfo AS b 
                WHERE a.Database_ID = b.Database_ID 
                  AND a.Object_ID = b.Object_ID
                  AND a.Index_ID <> b.Index_ID
@@ -82,10 +82,10 @@ SELECT 'Check 3 - Duplicated indexes' AS [Info],
        + 'ALTER INDEX ' + QUOTENAME(a.Index_Name) + N' ON ' + QUOTENAME(a.Schema_Name) + N'.' + QUOTENAME(a.Table_Name) + ' DISABLE;' 
        + NCHAR(13) + NCHAR(10) +
        'GO'
-  INTO tempdb.dbo.tmpIndexCheck3
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck3
+  FROM dbo.Tab_GetIndexInfo a
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck3
+SELECT * FROM dbo.tmpIndexCheck3
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

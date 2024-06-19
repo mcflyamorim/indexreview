@@ -25,8 +25,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck17') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck17
+IF OBJECT_ID('dbo.tmpIndexCheck17') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck17
 
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
@@ -34,8 +34,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SELECT 'Check17 - Check instance configurations' AS [Info],
        *, 
        CASE WHEN value <> 0 THEN 'Warning - Value is not set to default' ELSE 'OK' END AS comment
-INTO tempdb.dbo.tmpIndexCheck17
+INTO dbo.tmpIndexCheck17
 FROM sys.configurations
 WHERE name IN ('fill factor (%)', 'index create memory (KB)')
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck17
+SELECT * FROM dbo.tmpIndexCheck17

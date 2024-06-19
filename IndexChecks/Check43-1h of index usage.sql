@@ -31,11 +31,17 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck43') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck43
+IF OBJECT_ID('dbo.tmpIndexCheck43') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck43
 
 DECLARE @Minutes INT = 60 /* By default, capture data for 60 minutes */
 DECLARE @Database_ID INT, @Cmd NVARCHAR(MAX), @ErrMsg NVARCHAR(MAX)
+
+/* Setting minutes to 1 minute in case I'm running it on my lab. I don't want to wait for a hour.*/
+IF (@@SERVERNAME LIKE '%amorim%') OR (@@SERVERNAME LIKE '%fabiano%')
+BEGIN
+  SET @Minutes = 1
+END
 
 IF OBJECT_ID('tempdb.dbo.#tmp_dm_db_index_usage_stats') IS NOT NULL
   DROP TABLE #tmp_dm_db_index_usage_stats
@@ -152,7 +158,7 @@ BEGIN
            last_system_lookup, 
            last_system_update
       FROM sys.dm_db_index_usage_stats AS ius
-     WHERE database_id IN (SELECT DISTINCT Database_ID FROM tempdb.dbo.Tab_GetIndexInfo)
+     WHERE database_id IN (SELECT DISTINCT Database_ID FROM dbo.Tab_GetIndexInfo)
     OPTION (RECOMPILE)
   END TRY 
   BEGIN CATCH 
@@ -174,7 +180,7 @@ BEGIN
   /*Starting to read data from sys.dm_db_index_operational_stats for each database_id*/
   DECLARE c_db CURSOR FAST_FORWARD READ_ONLY FOR
   SELECT DISTINCT Database_ID
-  FROM tempdb.dbo.Tab_GetIndexInfo
+  FROM dbo.Tab_GetIndexInfo
 
   OPEN c_db
 
@@ -764,9 +770,9 @@ SELECT 'Check 43 - Report detailed index usage based on last 60 minutes' AS [Inf
        MIN(CTE_2.tree_page_io_latch_wait_in_ms) AS tree_page_io_latch_wait_in_ms_min,
        MAX(CTE_2.tree_page_io_latch_wait_in_ms) AS tree_page_io_latch_wait_in_ms_max,
        AVG(CTE_2.tree_page_io_latch_wait_in_ms) AS tree_page_io_latch_wait_in_ms_avg
-INTO tempdb.dbo.tmpIndexCheck43
+INTO dbo.tmpIndexCheck43
 FROM CTE_2
-LEFT OUTER JOIN tempdb.dbo.Tab_GetIndexInfo a
+LEFT OUTER JOIN dbo.Tab_GetIndexInfo a
 ON CTE_2.database_id = a.Database_ID
 AND CTE_2.object_id = a.Object_ID
 AND CTE_2.index_id = a.Index_ID
@@ -786,7 +792,7 @@ GROUP BY ISNULL(a.Database_Name, CTE_2.database_id),
        a.avg_fragmentation_in_percent,
        a.avg_page_space_used_in_percent
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck43
+SELECT * FROM dbo.tmpIndexCheck43
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

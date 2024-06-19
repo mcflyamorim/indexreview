@@ -1,6 +1,3 @@
-USE [master];
-GO
-
 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_NAME = 'sp_GetIndexInfo')
 	EXEC ('CREATE PROC dbo.sp_GetIndexInfo AS SELECT 1')
 GO
@@ -73,24 +70,28 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000; /*1 second*/
 
 DECLARE @statusMsg  VARCHAR(MAX) = ''
-DECLARE @AmazonRDS bit = CASE WHEN DB_ID('rdsadmin') IS NOT NULL AND SUSER_SNAME(0x01) = 'rdsa' THEN 1 ELSE 0 END
 
+DECLARE @AmazonRDS SMALLINT = CASE WHEN DB_ID('rdsadmin') IS NOT NULL AND SUSER_SNAME(0x01) = 'rdsa' THEN 1 ELSE 0 END
+DECLARE @SQLAzureDB SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 5 /* 5 = SQL Azure*/ THEN 1 ELSE 0 END
+DECLARE @SQLAzureManagedInstance SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 /*8 = Azure SQL Managed Instance*/ THEN 1 ELSE 0 END
 
-IF SERVERPROPERTY('EngineEdition') IN (5 /* 5 = SQL Azure*/, 8 /*8 = Azure SQL Managed Instance*/) OR @AmazonRDS = 1
+/* If this is running on AmazonRDS or Azure, database name has to be specified */
+IF ISNULL(@database_name_filter,'') = '' AND (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) > 0
 BEGIN
-  PRINT ''
+			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'This is running on AmazonRDS or Azure, this means database name filter parameter has to be specified as it will only work if you run the check for each DB at a time.'
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+    RETURN
 END
 
-
 /* If data already exists, skip the population, unless refresh was asked via @refreshdata */
-IF OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo') IS NOT NULL
+IF OBJECT_ID('dbo.Tab_GetIndexInfo') IS NOT NULL
 BEGIN
   /* 
      I'm assuming data for all tables exists, but I'm only checking tmp_stats... 
      if you're not sure if this is ok, use @refreshdata = 1 to force the refresh and 
      table population
   */
-  IF EXISTS(SELECT 1 FROM tempdb.dbo.Tab_GetIndexInfo) AND (@refreshdata = 0)
+  IF EXISTS(SELECT 1 FROM dbo.Tab_GetIndexInfo) AND (@refreshdata = 0)
   BEGIN
 			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Table with list of indexes already exists, I''ll reuse it and skip the code to populate the table.'
     RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
@@ -98,13 +99,13 @@ BEGIN
   END
   ELSE
   BEGIN
-    DROP TABLE tempdb.dbo.Tab_GetIndexInfo
+    DROP TABLE dbo.Tab_GetIndexInfo
   END
 END
 
 IF @skipfrag = 1
 BEGIN
-  IF OBJECT_ID('tempdb.dbo.#tmp_skipfrag') IS NOT NULL
+  IF OBJECT_ID('dbo.#tmp_skipfrag') IS NOT NULL
     DROP TABLE #tmp_skipfrag
 
   CREATE TABLE #tmp_skipfrag (ID INT)
@@ -114,12 +115,12 @@ END
 DECLARE @sql_old_table NVARCHAR(MAX)
 DECLARE @tmp_table_name NVARCHAR(MAX)
 
-IF OBJECT_ID('tempdb.dbo.#tmp_old_exec') IS NOT NULL
+IF OBJECT_ID('dbo.#tmp_old_exec') IS NOT NULL
   DROP TABLE #tmp_old_exec
 
 SELECT [name] 
 INTO #tmp_old_exec
-FROM tempdb.sys.tables
+FROM sys.tables
 WHERE type = 'U'
 AND name LIKE'tmpIndexCheck%'
 
@@ -131,7 +132,7 @@ FETCH NEXT FROM c_old_exec
 INTO @tmp_table_name
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @sql_old_table = 'DROP TABLE tempdb.dbo.[' + @tmp_table_name + '];'; 
+  SET @sql_old_table = 'DROP TABLE dbo.[' + @tmp_table_name + '];'; 
   EXEC (@sql_old_table)
 
   FETCH NEXT FROM c_old_exec
@@ -143,7 +144,7 @@ DEALLOCATE c_old_exec
 SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Collecting BP usage info...'
 RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
-IF OBJECT_ID('tempdb.dbo.#tmpBufferDescriptors') IS NOT NULL
+IF OBJECT_ID('dbo.#tmpBufferDescriptors') IS NOT NULL
     DROP TABLE #tmpBufferDescriptors;
 
 SELECT database_id,
@@ -170,7 +171,7 @@ BEGIN
   SET @TOP = 0
 END
 
-IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats') IS NOT NULL
+IF OBJECT_ID('dbo.#tmpdm_exec_query_stats') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats
   
 DECLARE @total_elapsed_time BIGINT,
@@ -196,7 +197,7 @@ AND NOT EXISTS(SELECT 1
 AND @skipcache = 0
 OPTION (RECOMPILE);
 
-IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
+IF OBJECT_ID('dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats_indx
 
 SELECT *
@@ -612,10 +613,10 @@ RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to run final query and parse query plan XML and populate tmpIndexCheckCachePlanData'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheckCachePlanData') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheckCachePlanData
+IF OBJECT_ID('dbo.tmpIndexCheckCachePlanData') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheckCachePlanData
 
-CREATE TABLE tempdb.dbo.tmpIndexCheckCachePlanData
+CREATE TABLE dbo.tmpIndexCheckCachePlanData
 (
   [database_name] [sys].[sysname] NULL,
   [object_name] [sys].[sysname] NULL,
@@ -760,7 +761,7 @@ BEGIN
       RAISERROR (@statusMsg, 0, 1) WITH NOWAIT
 
     ;WITH XMLNAMESPACES('http://schemas.microsoft.com/sqlserver/2004/07/showplan' AS p)
-    INSERT INTO tempdb.dbo.tmpIndexCheckCachePlanData WITH(TABLOCK)
+    INSERT INTO dbo.tmpIndexCheckCachePlanData WITH(TABLOCK)
     SELECT  CASE database_id 
               WHEN 32767 THEN 'ResourceDB' 
               ELSE DB_NAME(database_id)
@@ -982,10 +983,10 @@ RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to collect cache plan info...'
 RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
-IF OBJECT_ID('tempdb.dbo.Tab_GetIndexInfo') IS NOT NULL
-  DROP TABLE tempdb.dbo.Tab_GetIndexInfo
+IF OBJECT_ID('dbo.Tab_GetIndexInfo') IS NOT NULL
+  DROP TABLE dbo.Tab_GetIndexInfo
 
-CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
+CREATE TABLE dbo.Tab_GetIndexInfo
 (
   Database_ID INT,
   [Database_Name] [nvarchar] (128) NULL,
@@ -1115,13 +1116,13 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
 		SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating list of databases to work on.'
   RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-  IF OBJECT_ID('tempdb.dbo.#tmp_db') IS NOT NULL
+  IF OBJECT_ID('dbo.#tmp_db') IS NOT NULL
     DROP TABLE #tmp_db
 
   CREATE TABLE #tmp_db ([Database_Name] sysname)
 
-  /* If this is SQL2012+, check AG status */
-  IF (@sqlmajorver >= 11 /*SQL2012*/)
+  /* If this is SQL2012+ and is not running on Amazon RDS or Azure, check AG status */
+  IF (@sqlmajorver >= 11 /*SQL2012*/) AND (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) = 0
   BEGIN    
     BEGIN TRY
       INSERT INTO #tmp_db
@@ -1153,8 +1154,8 @@ CREATE TABLE tempdb.dbo.Tab_GetIndexInfo
       RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 		  END CATCH
   END
-  /* SQL2008R2 doesn't have AG, so, ignoring the AG DMVs */
-  ELSE IF (@sqlmajorver <= 10 /*SQL2008R2*/)
+  /* If running on AmazonRDS or Azure, ignore the AG DMVs */
+  ELSE IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) > 0
   BEGIN    
     BEGIN TRY
       INSERT INTO #tmp_db
@@ -1199,7 +1200,7 @@ BEGIN
   SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
   SET LOCK_TIMEOUT 1000; /*1 second*/
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_dm_db_index_usage_stats'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_dm_db_index_usage_stats'') IS NOT NULL
     DROP TABLE #tmp_dm_db_index_usage_stats
   BEGIN TRY
     /* Creating a copy of sys.dm_db_index_usage_stats because this is too slow to access without an index */
@@ -1215,7 +1216,7 @@ BEGIN
 
   CREATE CLUSTERED INDEX ix1 ON #tmp_dm_db_index_usage_stats (database_id, object_id, index_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_dm_db_index_operational_stats'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_dm_db_index_operational_stats'') IS NOT NULL
     DROP TABLE #tmp_dm_db_index_operational_stats
 
   BEGIN TRY
@@ -1291,62 +1292,62 @@ BEGIN
   RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
   /* Creating a copy of system tables because unindexed access to it can be very slow */
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_partitions'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_partitions'') IS NOT NULL
       DROP TABLE #tmp_sys_partitions;
   SELECT * INTO #tmp_sys_partitions FROM sys.partitions
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_partitions (object_id, index_id, partition_number)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_partition_stats;
   SELECT * INTO #tmp_sys_dm_db_partition_stats FROM sys.dm_db_partition_stats
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_partition_stats (object_id, index_id, partition_number)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_allocation_units'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_allocation_units'') IS NOT NULL
       DROP TABLE #tmp_sys_allocation_units;
   SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_allocation_units (container_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_index_columns'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_index_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_index_columns;
   SELECT * INTO #tmp_sys_index_columns FROM sys.index_columns
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_index_columns (object_id, index_id, index_column_id, column_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_all_columns'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_all_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_all_columns;
   SELECT * INTO #tmp_sys_all_columns FROM sys.all_columns
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_all_columns (object_id, column_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_indexes'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_indexes'') IS NOT NULL
       DROP TABLE #tmp_sys_indexes;
   SELECT * INTO #tmp_sys_indexes FROM sys.indexes
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_indexes (object_id, index_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_tables'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_tables'') IS NOT NULL
       DROP TABLE #tmp_sys_tables;
   SELECT * INTO #tmp_sys_tables FROM sys.tables
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_tables (object_id, schema_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_objects'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_objects'') IS NOT NULL
       DROP TABLE #tmp_sys_objects;
   SELECT * INTO #tmp_sys_objects FROM sys.objects
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_objects (object_id, schema_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_schemas'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_schemas'') IS NOT NULL
       DROP TABLE #tmp_sys_schemas;
   SELECT * INTO #tmp_sys_schemas FROM sys.schemas
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_schemas (schema_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_types'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_types'') IS NOT NULL
       DROP TABLE #tmp_sys_types;
   SELECT * INTO #tmp_sys_types FROM sys.types
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_types (user_type_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_filegroups'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_filegroups'') IS NOT NULL
       DROP TABLE #tmp_sys_filegroups;
   SELECT * INTO #tmp_sys_filegroups FROM sys.filegroups
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_filegroups (data_space_id)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_missing_index_details;
   SELECT * INTO #tmp_sys_dm_db_missing_index_details FROM sys.dm_db_missing_index_details
   WHERE database_id = DB_ID()
@@ -1361,7 +1362,7 @@ BEGIN
   SET LOCK_TIMEOUT 5000; /*5 seconds*/
   DECLARE @objname sysname, @idxname sysname, @object_id INT, @index_id INT, @row_count VARCHAR(50), @tot INT, @i INT, @size_gb NUMERIC(36, 4)
 
-  IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmpIndexFrag'') IS NOT NULL
     DROP TABLE #tmpIndexFrag;
 
   CREATE TABLE [#tmpIndexFrag]
@@ -1383,11 +1384,11 @@ BEGIN
     [compressed_page_count] BIGINT
   )
 
-  IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag_Cursor'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmpIndexFrag_Cursor'') IS NOT NULL
     DROP TABLE #tmpIndexFrag_Cursor;
 
   DECLARE @TOPFrag INT = 2147483647
-  IF OBJECT_ID(''tempdb.dbo.#tmp_skipfrag'') IS NOT NULL
+  IF OBJECT_ID(''dbo.#tmp_skipfrag'') IS NOT NULL
   BEGIN
     SET @TOPFrag = 0
   END
@@ -1693,13 +1694,13 @@ BEGIN
           ON sc.schema_id = t.schema_id
       CROSS APPLY
       (
-         SELECT STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number)
+         SELECT STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number) + ''('' + CONVERT(VARCHAR, #tmp_sys_partitions.rows)  + '') ''
                        FROM #tmp_sys_partitions
                        WHERE #tmp_sys_partitions.object_id = i.object_id
                        AND #tmp_sys_partitions.index_id = i.index_id
                        ORDER BY #tmp_sys_partitions.partition_number
                        FOR XML PATH('''')), 1, 1, ''''),
-                STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number) + ''('' + CONVERT(VARCHAR(200), #tmp_sys_partitions.data_compression_desc) + '')''
+                STUFF((SELECT '','' + CONVERT(VARCHAR, #tmp_sys_partitions.partition_number) + ''('' + CONVERT(VARCHAR(200), #tmp_sys_partitions.data_compression_desc) + '') ''
                               FROM #tmp_sys_partitions
                               WHERE #tmp_sys_partitions.object_id = i.object_id
                               AND #tmp_sys_partitions.index_id = i.index_id
@@ -1814,7 +1815,7 @@ BEGIN
     SELECT @SQL
   */  
   
-  INSERT INTO tempdb.dbo.Tab_GetIndexInfo
+  INSERT INTO dbo.Tab_GetIndexInfo
   EXEC (@SQL)
   
   FETCH NEXT FROM c_databases
@@ -1826,11 +1827,11 @@ DEALLOCATE c_databases
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Updating plan_cache_reference_count column.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-UPDATE tempdb.dbo.Tab_GetIndexInfo 
+UPDATE dbo.Tab_GetIndexInfo 
 SET plan_cache_reference_count = (SELECT COUNT(DISTINCT query_hash) 
-                                    FROM tempdb.dbo.tmpIndexCheckCachePlanData
+                                    FROM dbo.tmpIndexCheckCachePlanData
                                    WHERE CONVERT(NVARCHAR(MAX), tmpIndexCheckCachePlanData.index_list) COLLATE Latin1_General_BIN2 LIKE '%' + REPLACE(REPLACE(Tab1.Col1,'[','!['),']','!]') + '%' ESCAPE '!')
-FROM tempdb.dbo.Tab_GetIndexInfo
+FROM dbo.Tab_GetIndexInfo
 CROSS APPLY (SELECT '(' + QUOTENAME(Database_Name) + '.' + 
                           QUOTENAME(Schema_Name) + '.' + 
                           QUOTENAME(Table_Name) + 
@@ -1839,13 +1840,13 @@ CROSS APPLY (SELECT '(' + QUOTENAME(Database_Name) + '.' +
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to update plan_cache_reference_count column.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-CREATE UNIQUE CLUSTERED INDEX ix1 ON tempdb.dbo.Tab_GetIndexInfo(Database_ID, Object_ID, Index_ID)
-CREATE INDEX ix2 ON tempdb.dbo.Tab_GetIndexInfo(Database_Name, Schema_Name, Table_Name) INCLUDE(Index_ID, Number_Rows)
+CREATE UNIQUE CLUSTERED INDEX ix1 ON dbo.Tab_GetIndexInfo(Database_ID, Object_ID, Index_ID)
+CREATE INDEX ix2 ON dbo.Tab_GetIndexInfo(Database_Name, Schema_Name, Table_Name) INCLUDE(Index_ID, Number_Rows)
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to run script.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
---SELECT * FROM tempdb.dbo.Tab_GetIndexInfo
+--SELECT * FROM dbo.Tab_GetIndexInfo
 --ORDER BY ReservedSizeInMB DESC
 END
 GO

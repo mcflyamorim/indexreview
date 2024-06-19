@@ -28,8 +28,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck27') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck27
+IF OBJECT_ID('dbo.tmpIndexCheck27') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck27
 
 SELECT TOP 1000
        'Check27 - Index scans' AS [Info],
@@ -52,8 +52,8 @@ SELECT TOP 1000
        a.page_io_latch_wait_count,
        a.page_io_latch_wait_in_ms AS total_page_io_latch_wait_in_ms,
        CAST(1. * a.page_io_latch_wait_in_ms / NULLIF(a.page_io_latch_wait_count ,0) AS decimal(12,2)) AS page_io_latch_avg_wait_ms
-  INTO tempdb.dbo.tmpIndexCheck27
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck27
+  FROM dbo.Tab_GetIndexInfo a
 WHERE a.user_scans > 0 OR a.range_scan_count > 0
 ORDER BY a.user_scans DESC,
          a.Number_Rows DESC, 
@@ -63,7 +63,7 @@ ORDER BY a.user_scans DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck27
+SELECT * FROM dbo.tmpIndexCheck27
 ORDER BY user_scans DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

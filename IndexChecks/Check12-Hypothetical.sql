@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck12') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck12
+IF OBJECT_ID('dbo.tmpIndexCheck12') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck12
 
 DECLARE @sqlcmd NVARCHAR(MAX),
         @params NVARCHAR(600),
@@ -39,19 +39,9 @@ DECLARE @ErrorSeverity INT,
         @ErrorState INT,
         @ErrorMessage NVARCHAR(4000);
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
+IF OBJECT_ID('tempdb.dbo.#tmpdbs0') IS NOT NULL
     DROP TABLE #tmpdbs0;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
+
     CREATE TABLE #tmpdbs0
     (
         id INT IDENTITY(1, 1),
@@ -63,8 +53,8 @@ IF NOT EXISTS
     );
 
 SET @sqlcmd
-    = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                WHERE name in (select Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)';
+    = N'SELECT database_id, name, is_read_only, [state], 0 FROM sys.databases (NOLOCK) 
+                WHERE name in (select Database_Name FROM dbo.Tab_GetIndexInfo)';
 INSERT INTO #tmpdbs0
 (
     [dbid],
@@ -75,19 +65,9 @@ INSERT INTO #tmpdbs0
 )
 EXEC sp_executesql @sqlcmd;
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj')
-)
+IF OBJECT_ID('tempdb.dbo.#tblHypObj') IS NOT NULL
     DROP TABLE #tblHypObj;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj')
-)
+
     CREATE TABLE #tblHypObj
     (
         [DBName] sysname,
@@ -150,7 +130,7 @@ END;
 UPDATE #tmpdbs0
 SET isdone = 0;
 
-CREATE TABLE tempdb.dbo.tmpIndexCheck12
+CREATE TABLE dbo.tmpIndexCheck12
           ([Info] VARCHAR(800),
            [Database_Name] VARCHAR(800),
            [Table_Name] VARCHAR(800),
@@ -164,7 +144,7 @@ IF
     SELECT COUNT([Object])FROM #tblHypObj
 ) > 0
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck12
+    INSERT INTO dbo.tmpIndexCheck12
     SELECT 'Check12 - Hypothetical indexes' AS [Info],
            DBName AS [Database_Name],
            [Table] AS [Table_Name],
@@ -180,9 +160,9 @@ BEGIN
 END;
 ELSE
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck12([Info], [Comment])
+    INSERT INTO dbo.tmpIndexCheck12([Info], [Comment])
     SELECT 'Check12 - Hypothetical indexes' AS [Info],
            'OK' AS [Comment];
 END;
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck12
+SELECT * FROM dbo.tmpIndexCheck12

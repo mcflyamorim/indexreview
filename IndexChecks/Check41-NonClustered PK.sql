@@ -25,8 +25,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck41') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck41
+IF OBJECT_ID('dbo.tmpIndexCheck41') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck41
 
 SELECT 'Check 41 - Heaps with NonClustered PKs with high number of seeks/singleton_lookups on heap' AS [Info],
        a.Database_Name,
@@ -69,14 +69,14 @@ SELECT 'Check 41 - Heaps with NonClustered PKs with high number of seeks/singlet
        'WITH(DROP_EXISTING=ON)'
        + NCHAR(13) + NCHAR(10) +
        'GO'
-INTO tempdb.dbo.tmpIndexCheck41
-FROM tempdb.dbo.Tab_GetIndexInfo a
-INNER JOIN tempdb.dbo.Tab_GetIndexInfo b
+INTO dbo.tmpIndexCheck41
+FROM dbo.Tab_GetIndexInfo a
+INNER JOIN dbo.Tab_GetIndexInfo b
 ON a.Database_ID = b.Database_ID
 AND a.Object_ID = b.Object_ID
 AND b.Index_Type = 'HEAP'
 CROSS APPLY (SELECT SUM(c.[user_seeks]) AS [user_seeks_all_other_nonclustered]
-             FROM tempdb.dbo.Tab_GetIndexInfo c
+             FROM dbo.Tab_GetIndexInfo c
              WHERE a.Database_ID = c.Database_ID
              AND a.Object_ID = c.Object_ID
              AND c.Index_Type = 'NONCLUSTERED'
@@ -89,7 +89,7 @@ WHERE a.is_primary_key = 1
 AND a.Index_Type = 'NONCLUSTERED'
 AND a.Number_Rows >= 1000
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck41
+SELECT * FROM dbo.tmpIndexCheck41
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

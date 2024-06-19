@@ -40,8 +40,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck6') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck6
+IF OBJECT_ID('dbo.tmpIndexCheck6') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck6
 
 
 IF OBJECT_ID('tempdb.dbo.#db') IS NOT NULL
@@ -62,7 +62,7 @@ CREATE TABLE #tmp_Obj2 (DatabaseName NVarChar(MAX),
 SELECT d1.[name] into #db
 FROM sys.databases d1
 where d1.state_desc = 'ONLINE' and is_read_only = 0
-and d1.database_id in (SELECT DISTINCT Database_ID FROM tempdb.dbo.Tab_GetIndexInfo)
+and d1.database_id in (SELECT DISTINCT Database_ID FROM dbo.Tab_GetIndexInfo)
 
 DECLARE @SQL VarChar(MAX)
 declare @Database_Name sysname
@@ -129,7 +129,7 @@ DEALLOCATE c_databases
 SELECT 
 'Check6 - Dangerous SET options' AS [Info],
 *
-INTO tempdb.dbo.tmpIndexCheck6
+INTO dbo.tmpIndexCheck6
 FROM #tmp_Obj2
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck6
+SELECT * FROM dbo.tmpIndexCheck6

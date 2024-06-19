@@ -40,8 +40,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck5') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck5
+IF OBJECT_ID('dbo.tmpIndexCheck5') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck5
 
 SELECT 'Check5 - Incorrect metadata' AS [Info],
         a.Database_Name, 
@@ -51,11 +51,11 @@ SELECT 'Check5 - Incorrect metadata' AS [Info],
         a.Number_Rows AS current_number_of_rows_table, 
         t1.CntDistinctNumberOfRows,
         'DBCC UPDATEUSAGE (' + QUOTENAME(a.Database_Name) + ',' + CONVERT(VARCHAR, a.Object_ID) + ',' + CONVERT(VARCHAR,a.Index_ID) + ') WITH COUNT_ROWS;' AS CommandToFixIt
-INTO tempdb.dbo.tmpIndexCheck5
-FROM tempdb.dbo.Tab_GetIndexInfo AS a
+INTO dbo.tmpIndexCheck5
+FROM dbo.Tab_GetIndexInfo AS a
 CROSS APPLY( 
 SELECT COUNT(DISTINCT b.Number_Rows) AS CntDistinctNumberOfRows
-  FROM tempdb.dbo.Tab_GetIndexInfo AS b 
+  FROM dbo.Tab_GetIndexInfo AS b 
  WHERE a.Database_ID = b.Database_ID 
    AND a.Object_ID = b.Object_ID
    AND a.Schema_Name = b.Schema_Name
@@ -64,7 +64,7 @@ WHERE CntDistinctNumberOfRows > 1
 ORDER BY CntDistinctNumberOfRows DESC
 GO
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck5
+SELECT * FROM dbo.tmpIndexCheck5
 ORDER BY Database_Name,
          Schema_Name,
          Table_Name,

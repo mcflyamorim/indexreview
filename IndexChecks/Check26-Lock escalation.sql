@@ -29,8 +29,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck26') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck26
+IF OBJECT_ID('dbo.tmpIndexCheck26') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck26
 
 SELECT TOP 1000
        'Check26 - Lock escalation' AS [Info],
@@ -54,8 +54,8 @@ SELECT TOP 1000
        a.row_lock_wait_in_ms,
        a.page_lock_count,
        a.page_lock_wait_in_ms
-  INTO tempdb.dbo.tmpIndexCheck26
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck26
+  FROM dbo.Tab_GetIndexInfo a
 WHERE a.index_lock_escaltion_count > 0
 ORDER BY a.index_lock_escaltion_count DESC,
          a.Number_Rows DESC, 
@@ -65,7 +65,7 @@ ORDER BY a.index_lock_escaltion_count DESC,
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck26
+SELECT * FROM dbo.tmpIndexCheck26
 ORDER BY index_lock_escaltion_count DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

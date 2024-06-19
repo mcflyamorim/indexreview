@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck34') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck34
+IF OBJECT_ID('dbo.tmpIndexCheck34') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck34
 
 SELECT 'Check34 - Tables greater than 10mi and not partitioned' AS [Info],
        a.Database_Name,
@@ -38,13 +38,13 @@ SELECT 'Check34 - Tables greater than 10mi and not partitioned' AS [Info],
        a.Index_Type,
        a.Number_Rows AS current_number_of_rows_table,
        a.ReservedSizeInMB AS [Table Size]
-  INTO tempdb.dbo.tmpIndexCheck34
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck34
+  FROM dbo.Tab_GetIndexInfo a
  WHERE a.Number_Rows >= 10000000
    AND a.IsTablePartitioned = 0
    AND a.Index_ID <= 1
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck34
+SELECT * FROM dbo.tmpIndexCheck34
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

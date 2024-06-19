@@ -29,8 +29,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck21') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck21
+IF OBJECT_ID('dbo.tmpIndexCheck21') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck21
 
 DECLARE @IC NVARCHAR(4000), @ICWI NVARCHAR(4000), @editionCheck BIT
 
@@ -40,85 +40,9 @@ SET @editionCheck = 1 -- supports enterprise only features
 ELSE	
 SET @editionCheck = 0; -- does not support enterprise only features
 	
--- Create the helper functions
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
-EXEC ('USE tempdb; EXEC(''
-CREATE FUNCTION dbo.fn_createindex_allcols (@ix_handle int)
-RETURNS NVARCHAR(max)
-AS
-BEGIN
-DECLARE @ReturnCols NVARCHAR(max)
-;WITH ColumnToPivot ([data()]) AS ( 
-	SELECT CONVERT(VARCHAR(3),ic.column_id) + N'''','''' 
-	FROM sys.dm_db_missing_index_details id 
-	CROSS APPLY sys.dm_db_missing_index_columns(id.index_handle) ic
-	WHERE id.index_handle = @ix_handle 
-	ORDER BY ic.column_id ASC
-	FOR XML PATH(''''''''), TYPE 
-	), 
-	XmlRawData (CSVString) AS ( 
-		SELECT (SELECT [data()] AS InputData 
-		FROM ColumnToPivot AS d FOR XML RAW, TYPE).value(''''/row[1]/InputData[1]'''', ''''NVARCHAR(max)'''') AS CSVCol 
-	) 
-SELECT @ReturnCols = CASE WHEN LEN(CSVString) <= 1 THEN NULL ELSE LEFT(CSVString, LEN(CSVString)-1) END
-FROM XmlRawData
-RETURN (@ReturnCols)
-END'')
-')
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
-EXEC ('USE tempdb; EXEC(''
-CREATE FUNCTION dbo.fn_createindex_keycols (@ix_handle int)
-RETURNS NVARCHAR(max)
-AS
-BEGIN
-DECLARE @ReturnCols NVARCHAR(max)
-;WITH ColumnToPivot ([data()]) AS ( 
-	SELECT CONVERT(VARCHAR(3),ic.column_id) + N'''','''' 
-	FROM sys.dm_db_missing_index_details id 
-	CROSS APPLY sys.dm_db_missing_index_columns(id.index_handle) ic
-	WHERE id.index_handle = @ix_handle
-	AND (ic.column_usage = ''''EQUALITY'''' OR ic.column_usage = ''''INEQUALITY'''')
-	ORDER BY ic.column_id ASC
-	FOR XML PATH(''''''''), TYPE 
-	), 
-	XmlRawData (CSVString) AS ( 
-		SELECT (SELECT [data()] AS InputData 
-		FROM ColumnToPivot AS d FOR XML RAW, TYPE).value(''''/row[1]/InputData[1]'''', ''''NVARCHAR(max)'''') AS CSVCol 
-	) 
-SELECT @ReturnCols = CASE WHEN LEN(CSVString) <= 1 THEN NULL ELSE LEFT(CSVString, LEN(CSVString)-1) END
-FROM XmlRawData
-RETURN (@ReturnCols)
-END'')
-')
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
-EXEC ('USE tempdb; EXEC(''
-CREATE FUNCTION dbo.fn_createindex_includecols (@ix_handle int)
-RETURNS NVARCHAR(max)
-AS
-BEGIN
-DECLARE @ReturnCols NVARCHAR(max)
-;WITH ColumnToPivot ([data()]) AS ( 
-	SELECT CONVERT(VARCHAR(3),ic.column_id) + N'''','''' 
-	FROM sys.dm_db_missing_index_details id 
-	CROSS APPLY sys.dm_db_missing_index_columns(id.index_handle) ic
-	WHERE id.index_handle = @ix_handle
-	AND ic.column_usage = ''''INCLUDE''''
-	ORDER BY ic.column_id ASC
-	FOR XML PATH(''''''''), TYPE 
-	), 
-	XmlRawData (CSVString) AS ( 
-		SELECT (SELECT [data()] AS InputData 
-		FROM ColumnToPivot AS d FOR XML RAW, TYPE).value(''''/row[1]/InputData[1]'''', ''''NVARCHAR(max)'''') AS CSVCol 
-	) 
-SELECT @ReturnCols = CASE WHEN LEN(CSVString) <= 1 THEN NULL ELSE LEFT(CSVString, LEN(CSVString)-1) END
-FROM XmlRawData
-RETURN (@ReturnCols)
-END'')
-')
+IF OBJECT_ID('tempdb.dbo.#IndexCreation') IS NOT NULL
+  DROP TABLE #IndexCreation
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
-DROP TABLE #IndexCreation;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 CREATE TABLE #IndexCreation (
 	[database_id] int,
 	DBName NVARCHAR(1000),
@@ -137,9 +61,9 @@ CREATE TABLE #IndexCreation (
 	[IncludedColsOrdered] NVARCHAR(max)
 	)
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
-DROP TABLE #IndexRedundant;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
+IF OBJECT_ID('tempdb.dbo.#IndexRedundant') IS NOT NULL
+  DROP TABLE #IndexRedundant
+
 CREATE TABLE #IndexRedundant (
 	DBName NVARCHAR(1000),
 	[Table] NVARCHAR(255),
@@ -168,9 +92,6 @@ SELECT i.database_id,
 	i.included_columns AS [IncludedCols],
 	'IX_' + LEFT(RIGHT(RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3)), LEN(RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3))) - (CHARINDEX('.', RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3)), 1)) - 1),
 		LEN(RIGHT(RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3)), LEN(RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3))) - (CHARINDEX('.', RIGHT(i.[statement], LEN(i.[statement]) - (LEN(m.[name]) + 3)), 1)) - 1)) - 1) + '_' + CAST(i.index_handle AS NVARCHAR) AS [Ix_Name],
-	--tempdb.dbo.fn_createindex_allcols(i.index_handle), 
-	--tempdb.dbo.fn_createindex_keycols(i.index_handle),
-	--tempdb.dbo.fn_createindex_includecols(i.index_handle)
   (SELECT CASE
              WHEN LEN(CSVString) <= 1 THEN
                  NULL
@@ -243,7 +164,7 @@ SELECT i.database_id,
             ).value('/row[1]/InputData[1]', 'NVARCHAR(max)') AS CSVCol
     ) AS XmlRawData(CSVString))
 FROM sys.dm_db_missing_index_details i
-INNER JOIN master.sys.databases m ON i.database_id = m.database_id
+INNER JOIN sys.databases m ON i.database_id = m.database_id
 INNER JOIN sys.dm_db_missing_index_groups g ON i.index_handle = g.index_handle
 INNER JOIN sys.dm_db_missing_index_group_stats s ON s.group_handle = g.index_group_handle
 WHERE i.database_id > 4
@@ -291,10 +212,10 @@ SELECT 'Check21 - Missing index DMV' AS [Info],
 				                     IC.[Ix_Name] + ''') DROP INDEX ' + IC.[Table] + '.' +
 				                     IC.[Ix_Name] + ';' + 'CREATE INDEX ' +
 				                     IC.[Ix_Name] + ' ON ' + IC.[Table] + ' (' + IC.[KeyCols] + CASE WHEN @editionCheck = 1 THEN ') WITH (ONLINE = ON);' ELSE ');' END
-INTO tempdb.dbo.tmpIndexCheck21
+INTO dbo.tmpIndexCheck21
 FROM #IndexCreation IC
 --WHERE [Score] >= 1000
 ORDER BY IC.DBName, IC.[Table], IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck21
+SELECT * FROM dbo.tmpIndexCheck21
 ORDER BY [Database_Name], [Table_Name], [Score] DESC,[User_Hits_on_Missing_Index], [Estimated_Improvement_Percent];

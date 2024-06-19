@@ -32,8 +32,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck4') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck4
+IF OBJECT_ID('dbo.tmpIndexCheck4') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck4
 
 SELECT 'Check4 - Index fill-factor' AS [Info],
         a.Database_Name,
@@ -54,10 +54,10 @@ SELECT 'Check4 - Index fill-factor' AS [Info],
             ELSE
                 'OK'
         END AS [Comment]
-   INTO tempdb.dbo.tmpIndexCheck4
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck4
+   FROM dbo.Tab_GetIndexInfo AS a
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck4
+SELECT * FROM dbo.tmpIndexCheck4
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,

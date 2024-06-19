@@ -43,8 +43,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck16') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck16
+IF OBJECT_ID('dbo.tmpIndexCheck16') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck16
 
 DECLARE @sqlcmd NVARCHAR(MAX),
         @params NVARCHAR(600),
@@ -55,19 +55,9 @@ DECLARE @ErrorSeverity INT,
         @ErrorState INT,
         @ErrorMessage NVARCHAR(4000);
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
+IF OBJECT_ID('tempdb.dbo.#tmpdbs0') IS NOT NULL
     DROP TABLE #tmpdbs0;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
+
     CREATE TABLE #tmpdbs0
     (
         id INT IDENTITY(1, 1),
@@ -79,8 +69,8 @@ IF NOT EXISTS
     );
 
 SET @sqlcmd
-    = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                WHERE name in (select Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)';
+    = N'SELECT database_id, name, is_read_only, [state], 0 FROM sys.databases (NOLOCK) 
+                WHERE name in (select Database_Name FROM dbo.Tab_GetIndexInfo)';
 INSERT INTO #tmpdbs0
 (
     [dbid],
@@ -91,19 +81,9 @@ INSERT INTO #tmpdbs0
 )
 EXEC sp_executesql @sqlcmd;
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK')
-)
+IF OBJECT_ID('tempdb.dbo.#tblFK') IS NOT NULL
     DROP TABLE #tblFK;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK')
-)
+
     CREATE TABLE #tblFK
     (
         [databaseID] INT,
@@ -215,7 +195,7 @@ BEGIN
     WHERE [dbid] = @dbid;
 END;
 
-CREATE TABLE tempdb.dbo.tmpIndexCheck16
+CREATE TABLE dbo.tmpIndexCheck16
           ([Info] VARCHAR(800),
            [DatabaseName] VARCHAR(800),
            [Constraint_Name] VARCHAR(800),
@@ -233,7 +213,7 @@ IF
     SELECT COUNT(*)FROM #tblFK
 ) > 0
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck16
+    INSERT INTO dbo.tmpIndexCheck16
     SELECT 'Check 16 - Foreign Keys with no Index' AS [Info],
            FK.[DatabaseName] AS [Database_Name],
            constraint_name AS [Constraint_Name],
@@ -256,7 +236,7 @@ BEGIN
 END;
 ELSE
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck16([Info], Comment)
+    INSERT INTO dbo.tmpIndexCheck16([Info], Comment)
     SELECT 'Check 16 - Foreign Keys with no Index' AS [Info],
            'OK' AS [Comment];
 END;
@@ -273,8 +253,8 @@ SELECT tmpIndexCheck16.Info,
        tmpIndexCheck16.referencedColumns,
        tmpIndexCheck16.Comment,
        tmpIndexCheck16.CreateIndexCmd
-FROM tempdb.dbo.tmpIndexCheck16
-INNER JOIN tempdb.dbo.Tab_GetIndexInfo
+FROM dbo.tmpIndexCheck16
+INNER JOIN dbo.Tab_GetIndexInfo
 ON tmpIndexCheck16.[DatabaseName] = Tab_GetIndexInfo.Database_Name
 AND tmpIndexCheck16.Schema_Name = Tab_GetIndexInfo.Schema_Name
 AND tmpIndexCheck16.Table_Name = Tab_GetIndexInfo.Table_Name

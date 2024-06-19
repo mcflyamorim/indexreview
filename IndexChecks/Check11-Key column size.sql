@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck11') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck11
+IF OBJECT_ID('dbo.tmpIndexCheck11') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck11
 
 DECLARE @sqlmajorver INT
 SELECT @sqlmajorver = CONVERT(INT, (@@microsoftversion / 0x1000000) & 0xff);
@@ -51,8 +51,8 @@ SELECT 'Check 11 - Key column size' AS [Info],
             ELSE
                 '[WARNING: Index key is larger than allowed (900 bytes for clustered index; 1700 bytes for nonclustered index). It is recommended to revise these]'
         END AS [Comment]
-   INTO tempdb.dbo.tmpIndexCheck11
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck11
+   FROM dbo.Tab_GetIndexInfo AS a
   WHERE (
               [KeyCols_data_length_bytes] > 900
               AND @sqlmajorver < 13
@@ -70,7 +70,7 @@ SELECT 'Check 11 - Key column size' AS [Info],
               AND @sqlmajorver >= 13
           )
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck11
+SELECT * FROM dbo.tmpIndexCheck11
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

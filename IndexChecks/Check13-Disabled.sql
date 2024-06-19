@@ -33,8 +33,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck13') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck13
+IF OBJECT_ID('dbo.tmpIndexCheck13') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck13
 
 SELECT 'Check 13 - Disabled indexes' AS [Info],
         a.Database_Name,
@@ -54,11 +54,11 @@ SELECT 'Check 13 - Disabled indexes' AS [Info],
             ELSE
                 'OK'
         END AS [Comment]
-   INTO tempdb.dbo.tmpIndexCheck13
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck13
+   FROM dbo.Tab_GetIndexInfo AS a
   WHERE [is_disabled] = 1
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck13
+SELECT * FROM dbo.tmpIndexCheck13
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,

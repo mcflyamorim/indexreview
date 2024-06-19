@@ -37,8 +37,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck7') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck7
+IF OBJECT_ID('dbo.tmpIndexCheck7') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck7
 
 IF OBJECT_ID('tempdb.dbo.#tmpSequencial') IS NOT NULL
   DROP TABLE #tmpSequencial
@@ -65,7 +65,7 @@ SELECT SUBSTRING(t2.filter_definition, t1.RowID, 1) AS ColTmp1, *,
 CASE SUBSTRING(t2.filter_definition, t1.RowID, 1) WHEN '[' THEN 1 WHEN ']' THEN 2 ELSE 0 END ColTmp2
 FROM #tmpSequencial t1
 CROSS JOIN (SELECT t1.Database_ID, t1.Object_ID, t1.Index_ID, t1.filter_definition
-            FROM tempdb.dbo.Tab_GetIndexInfo AS t1
+            FROM dbo.Tab_GetIndexInfo AS t1
             WHERE t1.has_filter = 1
             AND (t1.filter_definition LIKE '%IS NULL%' OR t1.filter_definition LIKE '%IS NOT NULL%')) AS t2
 WHERE t1.RowID <= LEN(t2.filter_definition)
@@ -87,7 +87,7 @@ AS
 SELECT *
  FROM CTE_2
 CROSS APPLY(SELECT SUBSTRING(t1.filter_definition, CTE_2.ColStart, CTE_2.ColLen) AS ColName
-            FROM tempdb.dbo.Tab_GetIndexInfo AS t1
+            FROM dbo.Tab_GetIndexInfo AS t1
             WHERE t1.has_filter = 1
             AND (t1.filter_definition LIKE '%IS NULL%' OR t1.filter_definition LIKE '%IS NOT NULL%')
             AND CTE_2.Database_ID = t1.Database_ID AND CTE_2.Object_ID = t1.Object_ID AND CTE_2.Index_ID = t1.Index_ID) AS t2
@@ -112,8 +112,8 @@ SELECT 'Check7 - Filtered index that may not be used by QO' AS [Info],
        a.Buffer_Pool_SpaceUsed_MB,
        a.Buffer_Pool_FreeSpace_MB,
        CONVERT(NUMERIC(18, 2), (a.Buffer_Pool_FreeSpace_MB / CASE WHEN a.Buffer_Pool_SpaceUsed_MB = 0 THEN 1 ELSE a.Buffer_Pool_SpaceUsed_MB END) * 100) AS Buffer_Pool_FreeSpace_Percent
-INTO tempdb.dbo.tmpIndexCheck7
-FROM tempdb.dbo.Tab_GetIndexInfo AS a
+INTO dbo.tmpIndexCheck7
+FROM dbo.Tab_GetIndexInfo AS a
 INNER JOIN CTE_3
 ON CTE_3.Database_ID = a.Database_ID AND CTE_3.Object_ID = a.Object_ID AND CTE_3.Index_ID = a.Index_ID
 CROSS APPLY (SELECT CASE 
@@ -124,5 +124,5 @@ CROSS APPLY (SELECT CASE
 WHERE a.has_filter = 1
 AND (a.filter_definition LIKE '%IS NULL%' OR a.filter_definition LIKE '%IS NOT NULL%')
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck7
+SELECT * FROM dbo.tmpIndexCheck7
 ORDER BY current_number_of_rows_table DESC

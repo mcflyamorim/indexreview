@@ -29,8 +29,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY;
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck46') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck46;
+IF OBJECT_ID('dbo.tmpIndexCheck46') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck46;
 
 SELECT 'Check46 - Non-clustered indexes that are good candidates to become clustered indexes' AS [info],
        a.Database_Name AS database_name,
@@ -162,9 +162,9 @@ SELECT 'Check46 - Non-clustered indexes that are good candidates to become clust
            + '] had to do a lookup to read info about other columns, this may indicate this index is a good candidate to be recreated as a clustered index.'
          ELSE 'OK'
        END AS [comment]
-INTO tempdb.dbo.tmpIndexCheck46
-FROM tempdb.dbo.Tab_GetIndexInfo a
-INNER JOIN tempdb.dbo.Tab_GetIndexInfo b
+INTO dbo.tmpIndexCheck46
+FROM dbo.Tab_GetIndexInfo a
+INNER JOIN dbo.Tab_GetIndexInfo b
 ON a.Database_ID = b.Database_ID
    AND a.Object_ID = b.Object_ID
    AND b.Index_Type IN ('CLUSTERED', 'HEAP')
@@ -191,7 +191,7 @@ WHERE 1 = 1
       AND a.Number_Rows >= 100 /*Ignoring small tables*/;
 
 SELECT *
-FROM tempdb.dbo.tmpIndexCheck46
+FROM dbo.tmpIndexCheck46
 ORDER BY current_number_of_rows_table DESC,
          database_name,
          schema_name,

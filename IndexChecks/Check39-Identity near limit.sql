@@ -28,8 +28,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck39') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck39
+IF OBJECT_ID('dbo.tmpIndexCheck39') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck39
 
 IF OBJECT_ID('tempdb.dbo.#IdentityStatus') IS NOT NULL
     DROP TABLE #IdentityStatus;
@@ -56,7 +56,7 @@ WHERE d1.state_desc = 'ONLINE'
       AND is_read_only = 0
       AND d1.database_id IN
           (
-              SELECT DISTINCT database_id FROM tempdb.dbo.Tab_GetIndexInfo
+              SELECT DISTINCT database_id FROM dbo.Tab_GetIndexInfo
           );
 
 DECLARE @SQL VARCHAR(MAX);
@@ -133,7 +133,7 @@ SELECT 'Check39 - Identity columns' AS [Info],
              ELSE
                  'unknown'
          END AS details
-INTO tempdb.dbo.tmpIndexCheck39
+INTO dbo.tmpIndexCheck39
 FROM #IdentityStatus ic
     CROSS APPLY
 (
@@ -165,5 +165,5 @@ FROM #IdentityStatus ic
                 END AS NUMERIC(5, 1)) AS percent_remaining
 ) AS calc1;
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck39
+SELECT * FROM dbo.tmpIndexCheck39
 ORDER BY percent_remaining ASC

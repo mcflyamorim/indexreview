@@ -26,8 +26,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck18') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck18
+IF OBJECT_ID('dbo.tmpIndexCheck18') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck18
 
 DECLARE @sqlcmd NVARCHAR(MAX),
         @params NVARCHAR(600),
@@ -38,32 +38,22 @@ DECLARE @ErrorSeverity INT,
         @ErrorState INT,
         @ErrorMessage NVARCHAR(4000);
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
+IF OBJECT_ID('tempdb.dbo.#tmpdbs0') IS NOT NULL
     DROP TABLE #tmpdbs0;
-IF NOT EXISTS
+
+CREATE TABLE #tmpdbs0
 (
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')
-)
-    CREATE TABLE #tmpdbs0
-    (
-        id INT IDENTITY(1, 1),
-        [dbid] INT,
-        [dbname] NVARCHAR(1000),
-        is_read_only BIT,
-        [state] TINYINT,
-        isdone BIT
-    );
+    id INT IDENTITY(1, 1),
+    [dbid] INT,
+    [dbname] NVARCHAR(1000),
+    is_read_only BIT,
+    [state] TINYINT,
+    isdone BIT
+);
 
 SET @sqlcmd
-    = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                WHERE name in (select Database_Name FROM tempdb.dbo.Tab_GetIndexInfo)';
+    = N'SELECT database_id, name, is_read_only, [state], 0 FROM sys.databases (NOLOCK) 
+                WHERE name in (select Database_Name FROM dbo.Tab_GetIndexInfo)';
 INSERT INTO #tmpdbs0
 (
     [dbid],
@@ -75,74 +65,44 @@ INSERT INTO #tmpdbs0
 EXEC sp_executesql @sqlcmd;
 
 
-IF EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3')
-)
+IF OBJECT_ID('tempdb.dbo.#tblIxs3') IS NOT NULL
     DROP TABLE #tblIxs3;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3')
-)
-    CREATE TABLE #tblIxs3
-    (
-        [Operation] TINYINT,
-        [databaseID] INT,
-        [DatabaseName] sysname,
-        [schemaName] NVARCHAR(100),
-        [objectName] NVARCHAR(200),
-        [Rows] BIGINT
-    );
 
-IF EXISTS
+CREATE TABLE #tblIxs3
 (
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4')
-)
+    [Operation] TINYINT,
+    [databaseID] INT,
+    [DatabaseName] sysname,
+    [schemaName] NVARCHAR(100),
+    [objectName] NVARCHAR(200),
+    [Rows] BIGINT
+);
+
+IF OBJECT_ID('tempdb.dbo.#tblIxs4') IS NOT NULL
     DROP TABLE #tblIxs4;
-IF NOT EXISTS
-(
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4')
-)
-    CREATE TABLE #tblIxs4
-    (
-        [databaseID] INT,
-        [DatabaseName] sysname,
-        [schemaName] NVARCHAR(100),
-        [objectName] NVARCHAR(200),
-        [CntCols] INT,
-        [CntIxs] INT
-    );
 
-IF EXISTS
+CREATE TABLE #tblIxs4
 (
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5')
-)
+    [databaseID] INT,
+    [DatabaseName] sysname,
+    [schemaName] NVARCHAR(100),
+    [objectName] NVARCHAR(200),
+    [CntCols] INT,
+    [CntIxs] INT
+);
+
+IF OBJECT_ID('tempdb.dbo.#tblIxs5') IS NOT NULL
     DROP TABLE #tblIxs5;
-IF NOT EXISTS
+
+CREATE TABLE #tblIxs5
 (
-    SELECT [object_id]
-    FROM tempdb.sys.objects (NOLOCK)
-    WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5')
-)
-    CREATE TABLE #tblIxs5
-    (
-        [databaseID] INT,
-        [DatabaseName] sysname,
-        [schemaName] NVARCHAR(100),
-        [objectName] NVARCHAR(200),
-        [indexName] NVARCHAR(200),
-        [indexLocation] NVARCHAR(200)
-    );
+    [databaseID] INT,
+    [DatabaseName] sysname,
+    [schemaName] NVARCHAR(100),
+    [objectName] NVARCHAR(200),
+    [indexName] NVARCHAR(200),
+    [indexLocation] NVARCHAR(200)
+);
 
 UPDATE #tmpdbs0
 SET isdone = 0;
@@ -259,7 +219,7 @@ BEGIN
     WHERE [dbid] = @dbid;
 END;
 
-CREATE TABLE tempdb.dbo.tmpIndexCheck18
+CREATE TABLE dbo.tmpIndexCheck18
           ([Info] VARCHAR(800),
            [DatabaseName] VARCHAR(800),
            schemaName VARCHAR(800),
@@ -272,7 +232,7 @@ IF
     SELECT COUNT(*)FROM #tblIxs3 WHERE [Operation] = 2
 ) > 0
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck18
+    INSERT INTO dbo.tmpIndexCheck18
     SELECT 'Check 18 - Tables do not have a clustered index, but have non-clustered index(es)' AS [Info],
            [DatabaseName] AS [Database_Name],
            schemaName AS [Schema_Name],
@@ -284,9 +244,9 @@ BEGIN
 END;
 ELSE
 BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck18 ([Info], [Comment])
+    INSERT INTO dbo.tmpIndexCheck18 ([Info], [Comment])
     SELECT 'Check 18 - Tables do not have a clustered index, but have non-clustered index(es)' AS [Info],
            'OK' AS [Comment]
 END;
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck18
+SELECT * FROM dbo.tmpIndexCheck18

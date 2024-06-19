@@ -26,8 +26,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck9') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck9
+IF OBJECT_ID('dbo.tmpIndexCheck9') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck9
 
 IF OBJECT_ID('tempdb.dbo.#db') IS NOT NULL
   DROP TABLE #db
@@ -45,7 +45,7 @@ CREATE TABLE #tmp_Obj2 (DatabaseName                    NVarChar(MAX),
 SELECT d1.[name] into #db
 FROM sys.databases d1
 where d1.state_desc = 'ONLINE' and is_read_only = 0
-and d1.database_id in (SELECT DISTINCT Database_ID FROM tempdb.dbo.Tab_GetIndexInfo)
+and d1.database_id in (SELECT DISTINCT Database_ID FROM dbo.Tab_GetIndexInfo)
 
 DECLARE @SQL VarChar(MAX)
 declare @Database_Name sysname
@@ -77,7 +77,7 @@ BEGIN
               ;WITH CTE_1
               AS
               (
-                SELECT DISTINCT Table_Name, Index_Name FROM tempdb.dbo.Tab_GetIndexInfo
+                SELECT DISTINCT Table_Name, Index_Name FROM dbo.Tab_GetIndexInfo
                 WHERE Database_ID = DB_ID()
               )
               SELECT QUOTENAME(DB_NAME()) AS DatabaseName, 
@@ -118,7 +118,7 @@ SELECT 'Check 9 - Hard coded indexes' AS [Info],
        [Type of object],
        'Warning - Some sql objects have hard-coded references to indexes, those objects will fail if you drop the index.' AS [Comment],
        [Object code definition]
-INTO tempdb.dbo.tmpIndexCheck9
+INTO dbo.tmpIndexCheck9
 FROM #tmp_Obj2
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck9
+SELECT * FROM dbo.tmpIndexCheck9

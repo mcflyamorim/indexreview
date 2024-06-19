@@ -32,8 +32,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck19') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck19
+IF OBJECT_ID('dbo.tmpIndexCheck19') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck19
  
 SELECT 'Check19 - Heaps' AS [Info],
        a.Database_Name,
@@ -53,11 +53,11 @@ SELECT 'Check19 - Heaps' AS [Info],
        a.page_io_latch_wait_count,
        a.page_io_latch_wait_in_ms AS total_page_io_latch_wait_in_ms,
        CAST(1. * a.page_io_latch_wait_in_ms / NULLIF(a.page_io_latch_wait_count ,0) AS decimal(12,2)) AS page_io_latch_avg_wait_ms
-  INTO tempdb.dbo.tmpIndexCheck19
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck19
+  FROM dbo.Tab_GetIndexInfo a
  WHERE a.Index_Type = 'HEAP'
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck19
+SELECT * FROM dbo.tmpIndexCheck19
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,

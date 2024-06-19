@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck22') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck22
+IF OBJECT_ID('dbo.tmpIndexCheck22') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck22
 
 /* Fabiano Amorim  */
 /* http:\\www.blogfabiano.com | fabianonevesamorim@hotmail.com */
@@ -44,8 +44,8 @@ SELECT  'Check22 - Missing index plan cache' AS [Info],
         key_cols,
         include_cols,
         t2.create_index_command
-INTO tempdb.dbo.tmpIndexCheck22
-FROM tempdb.dbo.tmpIndexCheckCachePlanData qp
+INTO dbo.tmpIndexCheck22
+FROM dbo.tmpIndexCheckCachePlanData qp
 OUTER APPLY statement_plan.nodes('//p:Batch') AS Batch(x)
 CROSS APPLY
   --Find the Missing Indexes Group Nodes in the Plan
@@ -121,5 +121,5 @@ OUTER APPLY (SELECT CONVERT(XML, ISNULL(CONVERT(XML, '<?index --' +
                                               '--?>'))) AS t2 (create_index_command)
 OPTION (RECOMPILE, MAXDOP 4);
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck22
+SELECT * FROM dbo.tmpIndexCheck22
 ORDER BY index_impact DESC

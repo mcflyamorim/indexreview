@@ -27,8 +27,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck28') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck28
+IF OBJECT_ID('dbo.tmpIndexCheck28') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck28
 
 SELECT TOP 1000
        'Check28 - Indexes with largest index key' AS [Info],
@@ -45,8 +45,8 @@ SELECT TOP 1000
        a.last_datetime_obj_was_used,
        a.Buffer_Pool_SpaceUsed_MB,
        LEN(CONVERT(VARCHAR(MAX), indexed_columns)) - LEN(REPLACE(CONVERT(VARCHAR(MAX), indexed_columns), ',', '')) + 1 AS KeyColumnsCount
-  INTO tempdb.dbo.tmpIndexCheck28
-  FROM tempdb.dbo.Tab_GetIndexInfo a
+  INTO dbo.tmpIndexCheck28
+  FROM dbo.Tab_GetIndexInfo a
 ORDER BY LEN(CONVERT(VARCHAR(MAX), indexed_columns)) - LEN(REPLACE(CONVERT(VARCHAR(MAX), indexed_columns), ',', '')) + 1 DESC,
          a.Number_Rows DESC, 
          a.Database_Name,
@@ -55,7 +55,7 @@ ORDER BY LEN(CONVERT(VARCHAR(MAX), indexed_columns)) - LEN(REPLACE(CONVERT(VARCH
          a.ReservedSizeInMB DESC,
          a.Index_Name
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck28
+SELECT * FROM dbo.tmpIndexCheck28
 ORDER BY KeyColumnsCount DESC,
          current_number_of_rows_table DESC, 
          Database_Name,

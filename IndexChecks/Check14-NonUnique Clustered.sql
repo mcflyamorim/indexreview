@@ -43,8 +43,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 60000; /*60 seconds*/
 SET DATEFORMAT MDY
 
-IF OBJECT_ID('tempdb.dbo.tmpIndexCheck14') IS NOT NULL
-  DROP TABLE tempdb.dbo.tmpIndexCheck14
+IF OBJECT_ID('dbo.tmpIndexCheck14') IS NOT NULL
+  DROP TABLE dbo.tmpIndexCheck14
 
 SELECT 'Check 14 - Non-unique clustered indexes' AS [Info],
         a.Database_Name,
@@ -64,11 +64,11 @@ SELECT 'Check 14 - Non-unique clustered indexes' AS [Info],
             ELSE
                 'OK'
         END AS [Comment]
-   INTO tempdb.dbo.tmpIndexCheck14
-   FROM tempdb.dbo.Tab_GetIndexInfo AS a
+   INTO dbo.tmpIndexCheck14
+   FROM dbo.Tab_GetIndexInfo AS a
   WHERE [is_unique] = 0 AND Index_ID = 1
 
-SELECT * FROM tempdb.dbo.tmpIndexCheck14
+SELECT * FROM dbo.tmpIndexCheck14
  ORDER BY current_number_of_rows_table DESC, 
           Database_Name,
           Schema_Name,
