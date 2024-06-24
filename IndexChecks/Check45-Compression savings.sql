@@ -1506,7 +1506,6 @@ BEGIN
          [table_option_ddl],
          [sample_percent]
   FROM (SELECT DISTINCT
-               [index_id],
                [partition_column_id],
                [partition_function_id],
                [partition_number],
@@ -1519,7 +1518,7 @@ BEGIN
                       END AS [sample_percent]
                FROM [sys].[dm_db_partition_stats] [ps]
                WHERE [ps].[object_id] = @object_id
-                     AND [ps].[index_id] = [t].[index_id]
+                     AND [ps].[index_id] < 2
                      AND [ps].[partition_number] = [t].[partition_number]) [ps]
   CROSS APPLY [dbo].index_review_generate_table_sample_ddl(
                 @object_id,
