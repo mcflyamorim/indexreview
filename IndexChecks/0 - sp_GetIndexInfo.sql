@@ -105,7 +105,7 @@ END
 
 IF @skipfrag = 1
 BEGIN
-  IF OBJECT_ID('dbo.#tmp_skipfrag') IS NOT NULL
+  IF OBJECT_ID('tempdb.dbo.#tmp_skipfrag') IS NOT NULL
     DROP TABLE #tmp_skipfrag
 
   CREATE TABLE #tmp_skipfrag (ID INT)
@@ -115,7 +115,7 @@ END
 DECLARE @sql_old_table NVARCHAR(MAX)
 DECLARE @tmp_table_name NVARCHAR(MAX)
 
-IF OBJECT_ID('dbo.#tmp_old_exec') IS NOT NULL
+IF OBJECT_ID('tempdb.dbo.#tmp_old_exec') IS NOT NULL
   DROP TABLE #tmp_old_exec
 
 SELECT [name] 
@@ -144,7 +144,7 @@ DEALLOCATE c_old_exec
 SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Collecting BP usage info...'
 RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
-IF OBJECT_ID('dbo.#tmpBufferDescriptors') IS NOT NULL
+IF OBJECT_ID('tempdb.dbo.#tmpBufferDescriptors') IS NOT NULL
     DROP TABLE #tmpBufferDescriptors;
 
 SELECT database_id,
@@ -153,7 +153,8 @@ SELECT database_id,
        CONVERT(DECIMAL(25, 2), (SUM(CONVERT(NUMERIC(25,2), free_space_in_bytes)) / 1024.) / 1024.) AS FreeSpaceMB
 INTO #tmpBufferDescriptors
 FROM (SELECT * FROM sys.dm_os_buffer_descriptors) AS t
-GROUP BY database_id, allocation_unit_id;
+GROUP BY database_id, allocation_unit_id
+OPTION (MAXDOP 1);
 
 CREATE CLUSTERED INDEX ix1 ON #tmpBufferDescriptors (database_id, allocation_unit_id);
 
@@ -171,7 +172,7 @@ BEGIN
   SET @TOP = 0
 END
 
-IF OBJECT_ID('dbo.#tmpdm_exec_query_stats') IS NOT NULL
+IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats
   
 DECLARE @total_elapsed_time BIGINT,
@@ -197,7 +198,7 @@ AND NOT EXISTS(SELECT 1
 AND @skipcache = 0
 OPTION (RECOMPILE);
 
-IF OBJECT_ID('dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
+IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats_indx
 
 SELECT *
@@ -1116,7 +1117,7 @@ CREATE TABLE dbo.Tab_GetIndexInfo
 		SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating list of databases to work on.'
   RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-  IF OBJECT_ID('dbo.#tmp_db') IS NOT NULL
+  IF OBJECT_ID('tempdb.dbo.#tmp_db') IS NOT NULL
     DROP TABLE #tmp_db
 
   CREATE TABLE #tmp_db ([Database_Name] sysname)
@@ -1200,7 +1201,7 @@ BEGIN
   SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
   SET LOCK_TIMEOUT 1000; /*1 second*/
 
-  IF OBJECT_ID(''dbo.#tmp_dm_db_index_usage_stats'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_dm_db_index_usage_stats'') IS NOT NULL
     DROP TABLE #tmp_dm_db_index_usage_stats
   BEGIN TRY
     /* Creating a copy of sys.dm_db_index_usage_stats because this is too slow to access without an index */
@@ -1216,7 +1217,7 @@ BEGIN
 
   CREATE CLUSTERED INDEX ix1 ON #tmp_dm_db_index_usage_stats (database_id, object_id, index_id)
 
-  IF OBJECT_ID(''dbo.#tmp_dm_db_index_operational_stats'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_dm_db_index_operational_stats'') IS NOT NULL
     DROP TABLE #tmp_dm_db_index_operational_stats
 
   BEGIN TRY
@@ -1292,62 +1293,62 @@ BEGIN
   RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
   /* Creating a copy of system tables because unindexed access to it can be very slow */
-  IF OBJECT_ID(''dbo.#tmp_sys_partitions'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_partitions'') IS NOT NULL
       DROP TABLE #tmp_sys_partitions;
   SELECT * INTO #tmp_sys_partitions FROM sys.partitions
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_partitions (object_id, index_id, partition_number)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_partition_stats;
   SELECT * INTO #tmp_sys_dm_db_partition_stats FROM sys.dm_db_partition_stats
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_partition_stats (object_id, index_id, partition_number)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_allocation_units'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_allocation_units'') IS NOT NULL
       DROP TABLE #tmp_sys_allocation_units;
   SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_allocation_units (container_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_index_columns'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_index_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_index_columns;
   SELECT * INTO #tmp_sys_index_columns FROM sys.index_columns
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_index_columns (object_id, index_id, index_column_id, column_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_all_columns'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_all_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_all_columns;
   SELECT * INTO #tmp_sys_all_columns FROM sys.all_columns
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_all_columns (object_id, column_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_indexes'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_indexes'') IS NOT NULL
       DROP TABLE #tmp_sys_indexes;
   SELECT * INTO #tmp_sys_indexes FROM sys.indexes
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_indexes (object_id, index_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_tables'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_tables'') IS NOT NULL
       DROP TABLE #tmp_sys_tables;
   SELECT * INTO #tmp_sys_tables FROM sys.tables
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_tables (object_id, schema_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_objects'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_objects'') IS NOT NULL
       DROP TABLE #tmp_sys_objects;
   SELECT * INTO #tmp_sys_objects FROM sys.objects
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_objects (object_id, schema_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_schemas'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_schemas'') IS NOT NULL
       DROP TABLE #tmp_sys_schemas;
   SELECT * INTO #tmp_sys_schemas FROM sys.schemas
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_schemas (schema_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_types'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_types'') IS NOT NULL
       DROP TABLE #tmp_sys_types;
   SELECT * INTO #tmp_sys_types FROM sys.types
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_types (user_type_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_filegroups'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_filegroups'') IS NOT NULL
       DROP TABLE #tmp_sys_filegroups;
   SELECT * INTO #tmp_sys_filegroups FROM sys.filegroups
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_filegroups (data_space_id)
 
-  IF OBJECT_ID(''dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_missing_index_details;
   SELECT * INTO #tmp_sys_dm_db_missing_index_details FROM sys.dm_db_missing_index_details
   WHERE database_id = DB_ID()
@@ -1362,7 +1363,7 @@ BEGIN
   SET LOCK_TIMEOUT 5000; /*5 seconds*/
   DECLARE @objname sysname, @idxname sysname, @object_id INT, @index_id INT, @row_count VARCHAR(50), @tot INT, @i INT, @size_gb NUMERIC(36, 4)
 
-  IF OBJECT_ID(''dbo.#tmpIndexFrag'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag'') IS NOT NULL
     DROP TABLE #tmpIndexFrag;
 
   CREATE TABLE [#tmpIndexFrag]
@@ -1384,11 +1385,11 @@ BEGIN
     [compressed_page_count] BIGINT
   )
 
-  IF OBJECT_ID(''dbo.#tmpIndexFrag_Cursor'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmpIndexFrag_Cursor'') IS NOT NULL
     DROP TABLE #tmpIndexFrag_Cursor;
 
   DECLARE @TOPFrag INT = 2147483647
-  IF OBJECT_ID(''dbo.#tmp_skipfrag'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.#tmp_skipfrag'') IS NOT NULL
   BEGIN
     SET @TOPFrag = 0
   END
