@@ -1600,7 +1600,7 @@ BEGIN
                         ''tablesample ('' + CONVERT(VARCHAR(30), @number_percent_sample_batch) + '' percent)'');
 
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
-                         + ''Populating table sample, current table size = 0'' + ''mb (target = ''
+                         + ''Populating table sample, Current index size = 0'' + ''mb (target = ''
                          + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                          + ''insert_dll = '' + @insert_ddl;
     RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
@@ -1613,7 +1613,7 @@ BEGIN
     WHERE [object_id] = @sample_table_object_id;
 
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
-                         + ''Populating table sample, current table size = '' + CONVERT(VARCHAR(30), @current_size_batch)
+                         + ''Populating table sample, Current index size = '' + CONVERT(VARCHAR(30), @current_size_batch)
                          + ''mb (target = '' + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                          + ''insert_dll = '' + @insert_ddl;
     RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
@@ -1636,7 +1636,7 @@ BEGIN
       WHERE [object_id] = @sample_table_object_id;
 
       SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
-                           + ''Populating table sample, current table size = ''
+                           + ''Populating table sample, Current index size = ''
                            + CONVERT(VARCHAR(30), @current_size_batch) + ''mb (target = ''
                            + CONVERT(VARCHAR(30), @max_mb_to_sample) + ''mb), ''
                            + ''insert_dll = '' + @insert_ddl;
@@ -2047,7 +2047,7 @@ BEGIN
           WHERE [object_id] = @sample_table_object_id_compress;
 
           SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
-                               + ''Finished to populate table sample using compress function, current table size = ''
+                               + ''Finished to populate table sample using compress function, Current index size = ''
                                + CONVERT(VARCHAR(30), @current_size_batch) + ''mb.'';
           RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END TRY
@@ -2690,16 +2690,16 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
                THEN 
                  'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT 120000;' + NCHAR(13) + NCHAR(10) +
                  'DECLARE @statusMsg VARCHAR(MAX) = ''''' + NCHAR(13) + NCHAR(10) +
-                 'DECLARE @TableSize NUMERIC(25,4)' + NCHAR(13) + NCHAR(10) +
+                 'DECLARE @IndexSize NUMERIC(25,4)' + NCHAR(13) + NCHAR(10) +
                  'BEGIN TRY' + NCHAR(13) + NCHAR(10) +
                  '  IF NOT EXISTS(SELECT * FROM ' + QUOTENAME(t1.[database_name]) + '.sys.partitions WHERE partitions.object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + ' AND data_compression_desc = ''' + CONVERT(VARCHAR(200), t1.estimated_data_compression) + ''')' + NCHAR(13) + NCHAR(10) + 
                  '  BEGIN' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @IndexSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current index size = '' + CONVERT(VARCHAR(50), @IndexSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
                  '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '    ALTER TABLE ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD PARTITION = ' + CASE WHEN a.IsIndexPartitioned = 1 THEN CONVERT(VARCHAR(30), t1.partition_number) ELSE 'ALL' END + ' WITH(DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')' + NCHAR(13) + NCHAR(10) + 
-                 '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @IndexSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current index size = '' + CONVERT(VARCHAR(50), @IndexSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
                  '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg); ' + NCHAR(13) + NCHAR(10) +
                  '  END; ' + NCHAR(13) + NCHAR(10) +
                  'END TRY' + NCHAR(13) + NCHAR(10) +
@@ -2718,12 +2718,12 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
                THEN 
                  'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT 120000;' + NCHAR(13) + NCHAR(10) +
                  'DECLARE @statusMsg VARCHAR(MAX) = ''''' + NCHAR(13) + NCHAR(10) +
-                 'DECLARE @TableSize NUMERIC(25,4)' + NCHAR(13) + NCHAR(10) +
+                 'DECLARE @IndexSize NUMERIC(25,4)' + NCHAR(13) + NCHAR(10) +
                  'BEGIN TRY' + NCHAR(13) + NCHAR(10) +
                  '  IF NOT EXISTS(SELECT * FROM ' + QUOTENAME(t1.[database_name]) + '.sys.partitions WHERE partitions.object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + ' AND data_compression_desc = ''' + CONVERT(VARCHAR(200), t1.estimated_data_compression) + ''')' + NCHAR(13) + NCHAR(10) + 
                  '  BEGIN' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @IndexSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Starting to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current index size = '' + CONVERT(VARCHAR(50), @IndexSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
                  '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  CASE 
                    WHEN a.IsIndexPartitioned = 1 
@@ -2731,8 +2731,8 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
                    ELSE 
                           '    ALTER INDEX ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') +' ON ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ' REBUILD WITH(FILLFACTOR = 100, DATA_COMPRESSION=' + t1.estimated_data_compression + @rebuild_options + ')'
                  END + NCHAR(13) + NCHAR(10) +  
-                 '    SELECT @TableSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
-                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current table size = '' + CONVERT(VARCHAR(50), @TableSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @IndexSize = CONVERT(NUMERIC(25,4), SUM(reserved_page_count * 8) / 1024. / 1024.) FROM ' + QUOTENAME(t1.[database_name]) + '.sys.dm_db_partition_stats WHERE object_id = ' + CONVERT(VARCHAR(200), a.Object_ID) + ' AND index_id = ' + CONVERT(VARCHAR(200), t1.index_id) + ' AND partition_number = ' + CONVERT(VARCHAR(200), t1.partition_number) + '' + NCHAR(13) + NCHAR(10) +
+                 '    SELECT @statusMsg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - Finished to apply ' + t1.estimated_data_compression + ' compression on obj ' + ISNULL(QUOTENAME(t1.[index_name]),'ALL') + ' on ' + QUOTENAME(t1.[database_name]) + '.' + QUOTENAME(t1.[schema_name]) + '.' + QUOTENAME(t1.[object_name]) + ', Current index size = '' + CONVERT(VARCHAR(50), @IndexSize) + ''mb''' + NCHAR(13) + NCHAR(10) +
                  '    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);' + NCHAR(13) + NCHAR(10) +
                  '  END; ' + NCHAR(13) + NCHAR(10) +
                  'END TRY' + NCHAR(13) + NCHAR(10) +
@@ -3064,7 +3064,7 @@ ORDER BY CompressionOrderWeight DESC, CompressionOrder ASC
 /*
 -- Return final script 
 SELECT SqlToCompress AS "text()"
-FROM tempdb.dbo.tmpIndexCheck45
+FROM dbo.tmpIndexCheck45
 WHERE 1=1
 AND IsRecommendedAlgorithm = 1
 ORDER BY CompressionOrderWeight DESC, CompressionOrder ASC
