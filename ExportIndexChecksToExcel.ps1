@@ -424,98 +424,97 @@ if (-not (Get-Module -Name SqlServer)) {
     fnReturn
 }
 
-# Installing Az.Accounts module...
-# Module may be installed but not imported into the PS scope session... if so, call import-module
-if(Get-Module -Name Az.Accounts -ListAvailable){
-    Import-Module Az.Accounts -Force -ErrorAction Stop
-}
-if(-not (Get-Module -Name Az.Accounts))
-{
-    Write-Msg -Message "Az.Accounts is not installed, trying to install" -VerboseMsg
-    Write-Msg -Message "Trying to manually install Az.Accounts from Util folder" -VerboseMsg
-    if (Test-Path -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -PathType Leaf){
-        try {
-            foreach ($modpath in $($env:PSModulePath -split [IO.Path]::PathSeparator)) {
-                #Grab the user's default home directory module path for later
-                if ($modpath -like "*$([Environment]::UserName)*") {
-                    $userpath = $modpath
-                }
-                try {
-                    $temppath = Join-Path -Path $modpath -ChildPath "Az.Accounts"
-                    $localpath = (Get-ChildItem $temppath -ErrorAction Stop).FullName
-                } catch {
-                    $localpath = $null
-                }
-            }
-            if ($null -eq $localpath) {
-                if (!(Test-Path -Path $userpath)) {
-                    try {
-                        Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
-                        New-Item -Path $userpath -ItemType Directory | Out-Null
-                    } catch {
-                        throw "Can't create $userpath. You may need to Run as Administrator: $_"
-                    }
-                }
-                # In case Az.Accounts is not currently installed in any PSModulePath put it in the $userpath
-                if (Test-Path -Path $userpath) {
-                    $localpath = Join-Path -Path $userpath -ChildPath "Az.Accounts"
-                }
-            } else {
-                Write-Msg -Message "Updating current install" -VerboseMsg
-            }
-            $path = $localpath
-            if (!(Test-Path -Path $path)) {
-                try {
-                    Write-Msg -Message "Creating directory: $path" -VerboseMsg
-                    New-Item -Path $path -ItemType Directory | Out-Null
-                } catch {
-                    throw "Can't create $path. You may need to Run as Administrator: $_"
-                }
-            }
-
-            $AzAccountsDir = "$path"
-            $OutZip = Join-Path $AzAccountsDir 'Az.Accounts.zip'
-            Copy-Item -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -Destination $OutZip -ErrorAction Stop | Out-Null
-            if (Test-Path $OutZip) {
-                Write-Msg -Message "Trying to unzip $OutZip file" -VerboseMsg
-                Add-Type -AssemblyName 'System.Io.Compression.FileSystem'
-                [io.compression.zipfile]::ExtractToDirectory($OutZip, $AzAccountsDir)
-                if (Test-Path "$AzAccountsDir\Az.Accounts.psd1") {
-                    Write-Msg -Message "File extracted to $AzAccountsDir" -VerboseMsg
-                }
-            }
-            else {
-                throw "$OutZip file was not found"
-            }
-            $AzAccountsDir = "$AzAccountsDir\Az.Accounts.psd1"
-            Import-Module $AzAccountsDir -Force -ErrorAction Stop
-        } catch {
-            Write-Msg -Message "Error trying to install Az.Accounts from Util folder" -Level Error
-            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
-        }
-    }
-    else {
-        Write-Msg "Could not find file $ScriptPath\Util\Az.Accounts\Az.Accounts.zip, please make sure you've copied Az.Accounts.zip file to Util folder of this script." -Level Error
-        fnReturn
-    }
-    if(-not (Get-Module -Name Az.Accounts)){
-        try {
-            Write-Msg -Message "Trying to install Az.Accounts via Install-Module" -VerboseMsg
-            Install-Module Az.Accounts -Scope CurrentUser -Confirm:$False -Force -ErrorAction Stop | Out-Null
-            Import-Module Az.Accounts -Force -ErrorAction Stop
-        } catch {
-            Write-Msg -Message "Error trying to install Az.Accounts via Install-Module" -Level Error
-            Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
-        }
-    }
-}
-if (-not (Get-Module -Name Az.Accounts)) {
-    Write-Msg -Message "Az.Accounts is not installed, please install it before continue" -Level Error
-    fnReturn
-}
-
 # If instance is a AzureDB or SQLMI connect using a token
 if ($instance -like "*database.windows.net*"){
+    # Installing Az.Accounts module...
+    # Module may be installed but not imported into the PS scope session... if so, call import-module
+    if(Get-Module -Name Az.Accounts -ListAvailable){
+        Import-Module Az.Accounts -Force -ErrorAction Stop
+    }
+    if(-not (Get-Module -Name Az.Accounts))
+    {
+        Write-Msg -Message "Az.Accounts is not installed, trying to install" -VerboseMsg
+        Write-Msg -Message "Trying to manually install Az.Accounts from Util folder" -VerboseMsg
+        if (Test-Path -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -PathType Leaf){
+            try {
+                foreach ($modpath in $($env:PSModulePath -split [IO.Path]::PathSeparator)) {
+                    #Grab the user's default home directory module path for later
+                    if ($modpath -like "*$([Environment]::UserName)*") {
+                        $userpath = $modpath
+                    }
+                    try {
+                        $temppath = Join-Path -Path $modpath -ChildPath "Az.Accounts"
+                        $localpath = (Get-ChildItem $temppath -ErrorAction Stop).FullName
+                    } catch {
+                        $localpath = $null
+                    }
+                }
+                if ($null -eq $localpath) {
+                    if (!(Test-Path -Path $userpath)) {
+                        try {
+                            Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
+                            New-Item -Path $userpath -ItemType Directory | Out-Null
+                        } catch {
+                            throw "Can't create $userpath. You may need to Run as Administrator: $_"
+                        }
+                    }
+                    # In case Az.Accounts is not currently installed in any PSModulePath put it in the $userpath
+                    if (Test-Path -Path $userpath) {
+                        $localpath = Join-Path -Path $userpath -ChildPath "Az.Accounts"
+                    }
+                } else {
+                    Write-Msg -Message "Updating current install" -VerboseMsg
+                }
+                $path = $localpath
+                if (!(Test-Path -Path $path)) {
+                    try {
+                        Write-Msg -Message "Creating directory: $path" -VerboseMsg
+                        New-Item -Path $path -ItemType Directory | Out-Null
+                    } catch {
+                        throw "Can't create $path. You may need to Run as Administrator: $_"
+                    }
+                }
+
+                $AzAccountsDir = "$path"
+                $OutZip = Join-Path $AzAccountsDir 'Az.Accounts.zip'
+                Copy-Item -Path "$ScriptPath\Util\Az.Accounts\Az.Accounts.zip" -Destination $OutZip -ErrorAction Stop | Out-Null
+                if (Test-Path $OutZip) {
+                    Write-Msg -Message "Trying to unzip $OutZip file" -VerboseMsg
+                    Add-Type -AssemblyName 'System.Io.Compression.FileSystem'
+                    [io.compression.zipfile]::ExtractToDirectory($OutZip, $AzAccountsDir)
+                    if (Test-Path "$AzAccountsDir\Az.Accounts.psd1") {
+                        Write-Msg -Message "File extracted to $AzAccountsDir" -VerboseMsg
+                    }
+                }
+                else {
+                    throw "$OutZip file was not found"
+                }
+                $AzAccountsDir = "$AzAccountsDir\Az.Accounts.psd1"
+                Import-Module $AzAccountsDir -Force -ErrorAction Stop
+            } catch {
+                Write-Msg -Message "Error trying to install Az.Accounts from Util folder" -Level Error
+                Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+            }
+        }
+        else {
+            Write-Msg "Could not find file $ScriptPath\Util\Az.Accounts\Az.Accounts.zip, please make sure you've copied Az.Accounts.zip file to Util folder of this script." -Level Error
+            fnReturn
+        }
+        if(-not (Get-Module -Name Az.Accounts)){
+            try {
+                Write-Msg -Message "Trying to install Az.Accounts via Install-Module" -VerboseMsg
+                Install-Module Az.Accounts -Scope CurrentUser -Confirm:$False -Force -ErrorAction Stop | Out-Null
+                Import-Module Az.Accounts -Force -ErrorAction Stop
+            } catch {
+                Write-Msg -Message "Error trying to install Az.Accounts via Install-Module" -Level Error
+                Write-Msg -Message "ErrorMessage: $($_.Exception.Message)" -Level Error
+            }
+        }
+    }
+    if (-not (Get-Module -Name Az.Accounts)) {
+        Write-Msg -Message "Az.Accounts is not installed, please install it before continue" -Level Error
+        fnReturn
+    }
     # Enables all AzureRm prefixes for the current PowerShell session.
     Enable-AzureRmAlias -Scope CurrentUser | Out-NUll
 

@@ -53,8 +53,10 @@ DECLARE @AmazonRDS SMALLINT = CASE WHEN DB_ID('rdsadmin') IS NOT NULL AND SUSER_
 DECLARE @SQLAzureDB SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 5 /* 5 = SQL Azure*/ THEN 1 ELSE 0 END
 DECLARE @SQLAzureManagedInstance SMALLINT = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 /*8 = Azure SQL Managed Instance*/ THEN 1 ELSE 0 END
 
+DECLARE @CloudSQLGCP SMALLINT = CASE WHEN SUSER_ID ('CloudDbSqlRoot') IS NOT NULL THEN 1 ELSE 0 END
+
 /* Don't run it on AmazonRDS or Azure, as we don't have direct access to msdb jobs*/
-IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) = 0
+IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance + @CloudSQLGCP) = 0
 BEGIN
   IF OBJECT_ID('tempdb.dbo.#tblKeywords') IS NOT NULL
     DROP TABLE #tblKeywords;
