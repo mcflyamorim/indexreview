@@ -45,13 +45,12 @@ DECLARE @min_mb               BIGINT  = 100 /*100MB*/ /*Min of MBs on table to b
 --DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
 DECLARE @desired_compression  NVARCHAR(500)  = 'NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS' /*List of compression to be estimated*/;
 DECLARE @max_mb_to_sample     NUMERIC(25, 2) = 20 /*Max of MBs to read from source table to be used to populate the temporary object*/
-DECLARE @compress_column_size BIGINT         = 500 /*Min column size to be considered for COMPRESS test*/
+DECLARE @compress_column_size BIGINT= 500 /*Min column size to be considered for COMPRESS test*/
 
 /* Parameters controlling the structure of output scripts: */
 DECLARE @online_rebuild	BIT	= 1	/* If 1, will generate REBUILD commands with the ONLINE option turned on */
 DECLARE @sort_in_tempdb	BIT	= 1	/* If 1, will generate REBUILD commands with the SORT_IN_TEMPDB option turned on. */
 DECLARE @max_dop				    INT	= NULL	/* If not NULL, will add a MaxDOP option accordingly. Set to 1 to prevent parallelism and reduce workload. */
-DECLARE @fill_factor				INT	= 100	/* If not NULL, will add a fill factor option accordingly. */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------ Config params --------------------------------------------- */
@@ -69,10 +68,10 @@ IF OBJECT_ID('dbo.tmpIndexCheck45') IS NOT NULL
 IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
   DROP TABLE #tmp1
 
-IF OBJECT_ID('dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
-  DROP TABLE dbo.tmpIndexCheck45_CompressionResult;
+IF OBJECT_ID('tempdb.dbo.##tmpIndexCheck45_CompressionResult') IS NOT NULL
+  DROP TABLE ##tmpIndexCheck45_CompressionResult;
 
-CREATE TABLE dbo.tmpIndexCheck45_CompressionResult
+CREATE TABLE ##tmpIndexCheck45_CompressionResult
 (
   [database_name]                                      sysname,
   [object_name]                                        sysname,
@@ -202,7 +201,7 @@ BEGIN
 
   DECLARE @status_msg VARCHAR(MAX) = '''';
 
-  IF (SERVERPROPERTY(''EngineEdition'') NOT IN (2 /* Standard */, 3 /* Enterprise */, 4 /* Express */, 5 /* SQL Database */, 8 /* Azure SQL Managed Instance */))
+  IF (SERVERPROPERTY(''EngineEdition'') NOT IN (2 /* Standard */, 3 /* Enterprise */, 4 /* Express */, 8 /*Cloud Lifter */))
   BEGIN
     DECLARE @procName sysname = N''sp_estimate_data_compression_savings_v2'';
     DECLARE @procNameLen INT = DATALENGTH(@procName);
@@ -1518,7 +1517,7 @@ BEGIN
                       END AS [sample_percent]
                FROM [sys].[dm_db_partition_stats] [ps]
                WHERE [ps].[object_id] = @object_id
-                     AND [ps].[index_id] < 2
+                     AND [index_id] < 2
                      AND [ps].[partition_number] = [t].[partition_number]) [ps]
   CROSS APPLY [dbo].index_review_generate_table_sample_ddl(
                 @object_id,
@@ -2400,9 +2399,9 @@ BEGIN
   CLOSE [c];
   DEALLOCATE [c];
 
-  IF OBJECT_ID(''dbo.tmpIndexCheck45_CompressionResult'') IS NOT NULL
+  IF OBJECT_ID(''tempdb.dbo.##tmpIndexCheck45_CompressionResult'') IS NOT NULL
   BEGIN
-    INSERT INTO dbo.tmpIndexCheck45_CompressionResult
+    INSERT INTO ##tmpIndexCheck45_CompressionResult
     SELECT *
     FROM [#estimated_results]
     WHERE estimated_data_compression IN (SELECT col_data_compression FROM #tmp_data_compression);
@@ -2476,6 +2475,11 @@ END;
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000; /*1 seconds*/
+
+IF OBJECT_ID (''dbo.tmpIndexCheckMonitoring_Log'') IS NULL
+BEGIN
+  CREATE TABLE dbo.tmpIndexCheckMonitoring_Log (RowID INT IDENTITY(1, 1) PRIMARY KEY, Dt DATETIME DEFAULT GETDATE(), cStatus VARCHAR(MAX))
+END
 
 DECLARE @schema_name      sysname,
         @object_name      sysname,
@@ -2621,7 +2625,6 @@ SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Fin
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@statusMsg);
 
 DECLARE @rebuild_options VARCHAR(MAX) = ''
-SET @rebuild_options = @rebuild_options + ', PAD_INDEX = ON'
 
 IF @online_rebuild = 1 
   SET @rebuild_options = @rebuild_options + ', ONLINE = ON'
@@ -2629,8 +2632,6 @@ IF @sort_in_tempdb = 1
   SET @rebuild_options = @rebuild_options + ', SORT_IN_TEMPDB = ON'
 IF @max_dop IS NOT NULL 
   SET @rebuild_options = @rebuild_options + ', MAXDOP = ' + CONVERT(VARCHAR, @max_dop)
-IF @fill_factor IS NOT NULL
-  SET @rebuild_options = @rebuild_options + ', FILLFACTOR = ' + CONVERT(VARCHAR, @fill_factor)
 
 IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
   DROP TABLE #tmp1
@@ -2688,6 +2689,7 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
        t1.[sample_compressed_page_count],
        t1.sample_pages_with_current_compression_setting,
        t1.sample_pages_with_requested_compression_setting,
+       'SET NOCOUNT ON; ' + 
        CASE index_type_desc 
          WHEN 'HEAP' THEN
            CASE 
@@ -2747,7 +2749,7 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
            END
        END AS SqlToCompress
 INTO #tmp1
-FROM dbo.tmpIndexCheck45_CompressionResult AS t1
+FROM ##tmpIndexCheck45_CompressionResult AS t1
 LEFT OUTER JOIN dbo.Tab_GetIndexInfo a
 ON a.Database_Name = t1.database_name
 AND a.Schema_Name = t1.schema_name

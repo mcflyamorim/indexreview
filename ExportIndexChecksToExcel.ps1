@@ -234,7 +234,9 @@ Write-Msg -Message "------------------------------------------------------------
 Write-Msg -Message "Input parameters:"
 Write-Msg -Message "SQLInstance: $instance"
 Write-Msg -Message "UserName: $UserName"
-Write-Msg -Message "Password: $Password"
+if ($Password){
+    Write-Msg -Message "Password: ********"
+}
 Write-Msg -Message "Database: $Database"
 Write-Msg -Message "LogFilePath: $LogFilePath"
 Write-Msg -Message "Exporting data to $FileOutput"
@@ -545,6 +547,10 @@ try
             fnReturn
         }
 	}
+
+    if ($Database){
+        $Params.Database = $Database
+    }
 
     #If -Force_sp_GetIndexInfo_Execution is set, recreate and run proc sp_GetIndexInfo  
 	if ($Force_sp_GetIndexInfo_Execution) {
