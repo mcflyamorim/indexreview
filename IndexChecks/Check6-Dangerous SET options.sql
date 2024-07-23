@@ -112,7 +112,8 @@ BEGIN
               )
               ORDER BY
                   uses_ansi_nulls,
-                  uses_quoted_identifier'
+                  uses_quoted_identifier
+              OPTION (MAXDOP 1)'
 
   /*
   SELECT @SQL

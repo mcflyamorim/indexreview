@@ -73,6 +73,7 @@ BEGIN
               WHERE (PATINDEX(''%'' + ''INDEX='' + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 0
                      OR
                      PATINDEX(''%'' + ''INDEX ='' + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 0)
+              OPTION (MAXDOP 1)
 
               ;WITH CTE_1
               AS
@@ -96,7 +97,7 @@ BEGIN
               ON so.[schema_id] = ss.[schema_id]
               CROSS APPLY (SELECT CHAR(13)+CHAR(10) + sm.[definition] + CHAR(13)+CHAR(10) FOR XML RAW, ELEMENTS) AS Tab1(Col1)
               WHERE OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0
-              OPTION (FORCE ORDER)'
+              OPTION (FORCE ORDER, MAXDOP 1)'
 
   /*
   SELECT @SQL
