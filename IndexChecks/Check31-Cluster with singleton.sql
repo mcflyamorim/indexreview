@@ -30,7 +30,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('dbo.tmpIndexCheck31') IS NOT NULL
   DROP TABLE dbo.tmpIndexCheck31
 
-SELECT TOP 1000
+SELECT TOP 5000
        'Check31 - Most accessed indexes and number of singleton lookups and range scans' AS [Info],
        a.Database_Name,
        a.Schema_Name,
@@ -41,14 +41,19 @@ SELECT TOP 1000
        a.Number_Rows AS current_number_of_rows_table,
        user_seeks + user_scans + user_lookups + user_updates AS number_of_access_on_index_table_since_last_restart_or_rebuild,
        a.last_datetime_obj_was_used,
+       a.plan_cache_reference_count,
        a.ReservedSizeInMB,
+       a.Buffer_Pool_SpaceUsed_MB,
+       a.Buffer_Pool_FreeSpace_MB,
        a.singleton_lookup_count,
+       Tab3.clustered_singleton_lookup_count,
        a.range_scan_count,
        Tab1.singleton_lookup_ratio,
        Tab2.range_scan_ratio,
        a.user_seeks,
        a.user_scans,
        a.user_lookups,
+       Tab3.clustered_user_lookups,
        a.Number_of_Reads
   INTO dbo.tmpIndexCheck31
   FROM dbo.Tab_GetIndexInfo a
@@ -56,6 +61,10 @@ SELECT TOP 1000
               		       CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab1(singleton_lookup_ratio)
    CROSS APPLY (SELECT ISNULL(CONVERT(NUMERIC(18, 2),CAST(CASE WHEN range_scan_count = 0 THEN 0 ELSE CONVERT(REAL, range_scan_count) * 100 /
 		                     CASE (singleton_lookup_count + range_scan_count) WHEN 0 THEN 1 ELSE CONVERT(REAL, (singleton_lookup_count + range_scan_count)) END END AS DECIMAL(18,2))),0)) AS Tab2(range_scan_ratio)
+   CROSS APPLY (SELECT b.user_lookups AS clustered_user_lookups, b.singleton_lookup_count AS clustered_singleton_lookup_count
+                FROM dbo.Tab_GetIndexInfo b
+                WHERE b.Index_Type = 'CLUSTERED'
+                AND a.Object_ID = b.Object_ID) AS Tab3
 ORDER BY a.Number_of_Reads DESC,
          a.Number_Rows DESC, 
          a.Database_Name,

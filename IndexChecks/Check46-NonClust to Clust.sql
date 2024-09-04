@@ -133,7 +133,7 @@ SELECT 'Check46 - Non-clustered indexes that are good candidates to become clust
          WHEN CONVERT(DECIMAL(18, 2), REPLACE(Tab2.ratio_of_index_seeks_vs_base_table_lookups, '%', '')) < 25 THEN 'OK'
          /*Only provide recommendations for nonclustered indexes when number of seeks is greater than number of seeks of base table/clustered index*/
          WHEN a.user_seeks > b.user_seeks THEN
-           'Index [' + a.Index_Name + '] was used in '
+           'Index [' + ISNULL(a.Index_Name,'HEAP') + '] was used in '
            + CASE SUM(a.user_seeks) OVER (PARTITION BY a.Database_ID, a.Object_ID)
                WHEN 0 THEN '0%'
                ELSE
@@ -145,7 +145,7 @@ SELECT 'Check46 - Non-clustered indexes that are good candidates to become clust
                      / CONVERT(NUMERIC(18, 2), SUM(a.user_seeks) OVER (PARTITION BY a.Database_ID, a.Object_ID))
                      * 100.00)) + '%'
              END + ' of all seeks(' + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, a.user_seeks), 1), '.00', '')
-           + ') on this table while the base table index [' + b.Index_Name + '] was only used '
+           + ') on this table while the base table index [' + ISNULL(b.Index_Name,'HEAP') + '] was only used '
            + CASE b.user_seeks
                WHEN 0 THEN '0%'
                ELSE
@@ -158,7 +158,7 @@ SELECT 'Check46 - Non-clustered indexes that are good candidates to become clust
            + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, b.user_seeks), 1), '.00', '') + '), also, number of lookups('
            + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, b.user_lookups), 1), '.00', '')
            + ') on base table may indicate a high percentage (estimation of '
-           + Tab2.ratio_of_index_seeks_vs_base_table_lookups + ') of access to [' + a.Index_Name
+           + Tab2.ratio_of_index_seeks_vs_base_table_lookups + ') of access to [' + ISNULL(a.Index_Name,'HEAP')
            + '] had to do a lookup to read info about other columns, this may indicate this index is a good candidate to be recreated as a clustered index.'
          ELSE 'OK'
        END AS [comment]

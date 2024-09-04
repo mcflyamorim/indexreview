@@ -1462,6 +1462,7 @@ BEGIN
           SUM(ISNULL(dm_db_index_physical_stats.compressed_page_count,0)) AS compressed_page_count
         FROM sys.dm_db_index_physical_stats(DB_ID(), @object_id, @index_id, NULL, CASE WHEN @size_gb >= 1.00 THEN ''LIMITED'' ELSE ''SAMPLED'' END)
         WHERE index_level = 0 /*leaf-level nodes only*/
+        AND alloc_unit_type_desc = ''IN_ROW_DATA'' /*Ignore LOB data*/
         GROUP BY dm_db_index_physical_stats.database_id,
                  dm_db_index_physical_stats.object_id,
                  dm_db_index_physical_stats.index_id
