@@ -760,8 +760,8 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 `
+        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -MaxCharLength 10000000 `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"

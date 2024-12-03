@@ -123,6 +123,7 @@ INTO #tmp_old_exec
 FROM sys.tables
 WHERE type = 'U'
 AND name LIKE'tmpIndexCheck%'
+OPTION (MAXDOP 1)
 
 DECLARE c_old_exec CURSOR read_only FOR
     SELECT [name] FROM #tmp_old_exec
@@ -196,7 +197,7 @@ AND NOT EXISTS(SELECT 1
                  WHERE dm_exec_cached_plans.plan_handle = dm_exec_query_stats.plan_handle
                  AND dm_exec_cached_plans.cacheobjtype = 'Compiled Plan Stub') /*Ignoring AdHoc - Plan Stub*/
 AND @skipcache = 0
-OPTION (RECOMPILE);
+OPTION (RECOMPILE, MAXDOP 1);
 
 IF OBJECT_ID('tempdb.dbo.#tmpdm_exec_query_stats_indx') IS NOT NULL
   DROP TABLE #tmpdm_exec_query_stats_indx
@@ -211,7 +212,7 @@ AND NOT EXISTS(SELECT 1
                  WHERE dm_exec_cached_plans.plan_handle = dm_exec_query_stats.plan_handle
                  AND dm_exec_cached_plans.cacheobjtype = 'Compiled Plan Stub') /*Ignoring AdHoc - Plan Stub*/
 AND @skipcache = 0
-OPTION (RECOMPILE);
+OPTION (RECOMPILE, MAXDOP 1);
 
 CREATE CLUSTERED INDEX ixquery_hash ON #tmpdm_exec_query_stats_indx(query_hash, last_execution_time)
 
@@ -385,7 +386,7 @@ FROM (SELECT query_hash,
 INNER JOIN sys.dm_exec_cached_plans
 ON dm_exec_cached_plans.plan_handle = t_dm_exec_query_stats.plan_handle
 ORDER BY query_impact DESC
-OPTION (RECOMPILE);
+OPTION (RECOMPILE, MAXDOP 1);
 
 ALTER TABLE #tmpdm_exec_query_stats ADD CONSTRAINT pk_sp_getindexinfo_tmpdm_exec_query_stats
 PRIMARY KEY (plan_handle, statement_start_offset, statement_end_offset)
@@ -399,6 +400,7 @@ DECLARE @number_plans BIGINT,
 
 SELECT @number_plans = COUNT(*) 
 FROM #tmpdm_exec_query_stats
+OPTION (MAXDOP 1)
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to capture XML query plan and statement text for cached plans. Found ' + CONVERT(VARCHAR(200), @number_plans) + ' plans on sys.dm_exec_query_stats.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
@@ -493,6 +495,7 @@ BEGIN
     WHERE qs.plan_handle = @plan_handle
     AND qs.statement_start_offset = @statement_start_offset
     AND qs.statement_end_offset = @statement_end_offset
+    OPTION (MAXDOP 1)
 
     /* If wasn't able to extract text from the query plan, try to get it from the very slow sys.dm_exec_sql_text DMF */
     IF EXISTS(SELECT 1 FROM #tmpdm_exec_query_stats AS qs
@@ -738,7 +741,7 @@ DECLARE @ctp INT;
 SELECT  @ctp = CAST(value AS INT)
 FROM    sys.configurations
 WHERE   name = 'cost threshold for parallelism'
-OPTION (RECOMPILE);
+OPTION (RECOMPILE, MAXDOP 1);
 
 /* Setting "parameter sniffing variance percent" to 30% */
 DECLARE @parameter_sniffing_warning_pct TINYINT = 30;
@@ -963,6 +966,7 @@ BEGIN
     WHERE qp.plan_handle = @plan_handle
     AND qp.statement_start_offset = @statement_start_offset
     AND qp.statement_end_offset = @statement_end_offset
+    OPTION (MAXDOP 1)
 		END TRY
 		BEGIN CATCH
 			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to work on plan [' + CONVERT(NVARCHAR(800), @plan_handle, 1) + ']. Skipping this plan.'
@@ -1147,6 +1151,7 @@ BEGIN
          OR 
          (hars.role_desc = 'SECONDARY' AND ar.secondary_role_allow_connections_desc IN ('READ_ONLY','ALL'))
         )
+    OPTION (MAXDOP 1)
 		END TRY
 		BEGIN CATCH
 			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
@@ -1170,6 +1175,7 @@ BEGIN
     AND d1.is_read_only = 0 
     /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
     AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+    OPTION (MAXDOP 1)
 		END TRY
 		BEGIN CATCH
 			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
@@ -1185,18 +1191,27 @@ SET @ListOfDBs = (SELECT ' -- ' + [Database_Name] + ' -- ' FROM #tmp_db FOR XML 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'List of DBs: ' + REPLACE(@ListOfDBs, ' --  -- ', ' -- ')
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
+SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + '--------------------------------------------------------'
+RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
+
+DECLARE @CountDBs VARCHAR(10) = ''
+SELECT @CountDBs = CONVERT(VARCHAR(10), COUNT(*))
+FROM #tmp_db
+
+DECLARE @iDB INT = 0
 DECLARE @SQL VarCHar(MAX)
-declare @Database_Name sysname
+DECLARE @Database_Name sysname
 
 DECLARE c_databases CURSOR read_only FOR
     SELECT [Database_Name] FROM #tmp_db
 OPEN c_databases
 
 FETCH NEXT FROM c_databases
-into @Database_Name
+INTO @Database_Name
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Working on DB - [' + @Database_Name + ']'
+  SET @iDB = @iDB + 1;
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Working on DB ' + '(' + CONVERT(VARCHAR, @iDB) + ' of ' + @CountDBs  + ')' + ' - [' + @Database_Name + ']'
   RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
 
   SET @SQL = 'use [' + @Database_Name + ']; ' + 
@@ -1215,6 +1230,7 @@ BEGIN
       INTO #tmp_dm_db_index_usage_stats 
       FROM sys.dm_db_index_usage_stats AS ius WITH(NOLOCK)
       WHERE ius.database_id = DB_ID()
+      OPTION (MAXDOP 1)
   END TRY
   BEGIN CATCH
     SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Error while trying to read data from sys.dm_db_index_usage_stats. You may see limited results because of it.''
@@ -1301,63 +1317,62 @@ BEGIN
   /* Creating a copy of system tables because unindexed access to it can be very slow */
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_partitions'') IS NOT NULL
       DROP TABLE #tmp_sys_partitions;
-  SELECT * INTO #tmp_sys_partitions FROM sys.partitions
+  SELECT * INTO #tmp_sys_partitions FROM sys.partitions OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_partitions (object_id, index_id, partition_number)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_partition_stats'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_partition_stats;
-  SELECT * INTO #tmp_sys_dm_db_partition_stats FROM sys.dm_db_partition_stats
+  SELECT * INTO #tmp_sys_dm_db_partition_stats FROM sys.dm_db_partition_stats OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_partition_stats (object_id, index_id, partition_number)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_allocation_units'') IS NOT NULL
       DROP TABLE #tmp_sys_allocation_units;
-  SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units
+  SELECT * INTO #tmp_sys_allocation_units FROM sys.allocation_units OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_allocation_units (container_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_index_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_index_columns;
-  SELECT * INTO #tmp_sys_index_columns FROM sys.index_columns
+  SELECT * INTO #tmp_sys_index_columns FROM sys.index_columns OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_index_columns (object_id, index_id, index_column_id, column_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_all_columns'') IS NOT NULL
       DROP TABLE #tmp_sys_all_columns;
-  SELECT * INTO #tmp_sys_all_columns FROM sys.all_columns
+  SELECT * INTO #tmp_sys_all_columns FROM sys.all_columns OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_all_columns (object_id, column_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_indexes'') IS NOT NULL
       DROP TABLE #tmp_sys_indexes;
-  SELECT * INTO #tmp_sys_indexes FROM sys.indexes
+  SELECT * INTO #tmp_sys_indexes FROM sys.indexes OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_indexes (object_id, index_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_tables'') IS NOT NULL
       DROP TABLE #tmp_sys_tables;
-  SELECT * INTO #tmp_sys_tables FROM sys.tables
+  SELECT * INTO #tmp_sys_tables FROM sys.tables OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_tables (object_id, schema_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_objects'') IS NOT NULL
       DROP TABLE #tmp_sys_objects;
-  SELECT * INTO #tmp_sys_objects FROM sys.objects
+  SELECT * INTO #tmp_sys_objects FROM sys.objects OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_objects (object_id, schema_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_schemas'') IS NOT NULL
       DROP TABLE #tmp_sys_schemas;
-  SELECT * INTO #tmp_sys_schemas FROM sys.schemas
+  SELECT * INTO #tmp_sys_schemas FROM sys.schemas OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_schemas (schema_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_types'') IS NOT NULL
       DROP TABLE #tmp_sys_types;
-  SELECT * INTO #tmp_sys_types FROM sys.types
+  SELECT * INTO #tmp_sys_types FROM sys.types OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_types (user_type_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_filegroups'') IS NOT NULL
       DROP TABLE #tmp_sys_filegroups;
-  SELECT * INTO #tmp_sys_filegroups FROM sys.filegroups
+  SELECT * INTO #tmp_sys_filegroups FROM sys.filegroups OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_filegroups (data_space_id)
 
   IF OBJECT_ID(''tempdb.dbo.#tmp_sys_dm_db_missing_index_details'') IS NOT NULL
       DROP TABLE #tmp_sys_dm_db_missing_index_details;
-  SELECT * INTO #tmp_sys_dm_db_missing_index_details FROM sys.dm_db_missing_index_details
-  WHERE database_id = DB_ID()
+  SELECT * INTO #tmp_sys_dm_db_missing_index_details FROM sys.dm_db_missing_index_details WHERE database_id = DB_ID() OPTION (MAXDOP 1)
   CREATE CLUSTERED INDEX ix1 ON #tmp_sys_dm_db_missing_index_details (database_id, object_id)
 
   SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to create copy of system tables...''
@@ -1424,6 +1439,7 @@ BEGIN
            indexes.object_id,
            indexes.index_id
   HAVING SUM(dm_db_partition_stats.row_count) > 0
+  OPTION (MAXDOP 1)
 
   SET @tot = @@ROWCOUNT
 
@@ -1475,7 +1491,7 @@ BEGIN
         GROUP BY dm_db_index_physical_stats.database_id,
                  dm_db_index_physical_stats.object_id,
                  dm_db_index_physical_stats.index_id
-        OPTION (RECOMPILE);
+        OPTION (RECOMPILE, MAXDOP 1);
       END
     END TRY
     BEGIN CATCH
@@ -1823,17 +1839,30 @@ BEGIN
                                       ) AS t(Dt)) AS TabIndexUsage(last_datetime_obj_was_used)
   WHERE OBJECTPROPERTY(i.[object_id], ''IsUserTable'') = 1
   ORDER BY tSize.ReservedSizeInMB DESC
+  OPTION (MAXDOP 1)
   '
 
   /*
     SELECT @SQL
   */  
   
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to insert index data into Tab_GetIndexInfo table.'
+  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
+
   INSERT INTO dbo.Tab_GetIndexInfo
   EXEC (@SQL)
+
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to insert index data into Tab_GetIndexInfo table.'
+  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
   
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to work on DB ' + '(' + CONVERT(VARCHAR, @iDB) + ' of ' + @CountDBs  + ')' + ' - [' + @Database_Name + ']'
+  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
+
+  SET @statusMsg = '[' + CONVERT(VARCHAR(200), GETDATE(), 120) + '] - ' + '--------------------------------------------------------'
+  RAISERROR (@statusMsg, 10, 1) WITH NOWAIT
+
   FETCH NEXT FROM c_databases
-  into @Database_Name
+  INTO @Database_Name
 END
 CLOSE c_databases
 DEALLOCATE c_databases
@@ -1850,6 +1879,7 @@ CROSS APPLY (SELECT '(' + QUOTENAME(Database_Name) + '.' +
                           QUOTENAME(Schema_Name) + '.' + 
                           QUOTENAME(Table_Name) + 
                           ISNULL('.' + QUOTENAME(Index_Name),'') + ')') AS Tab1(Col1)
+OPTION (MAXDOP 1)
 
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to update plan_cache_reference_count column.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT

@@ -51,6 +51,13 @@ DECLARE @SQL VarChar(MAX)
 declare @Database_Name sysname
 DECLARE @ErrMsg VarChar(8000)
 
+IF OBJECT_ID('tempdb.dbo.#tmp1') IS NOT NULL
+  DROP TABLE #tmp1
+
+SELECT DISTINCT Database_ID, Table_Name, Index_Name 
+INTO #tmp1
+FROM dbo.Tab_GetIndexInfo
+
 DECLARE c_databases CURSOR read_only FOR
     SELECT [name] FROM #db
 OPEN c_databases
@@ -78,7 +85,7 @@ BEGIN
               ;WITH CTE_1
               AS
               (
-                SELECT DISTINCT Table_Name, Index_Name FROM dbo.Tab_GetIndexInfo
+                SELECT DISTINCT Table_Name, Index_Name FROM #tmp1
                 WHERE Database_ID = DB_ID()
               )
               SELECT QUOTENAME(DB_NAME()) AS DatabaseName, 
