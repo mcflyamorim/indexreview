@@ -1,5 +1,3 @@
-USE master;
-GO
 IF NOT EXISTS (SELECT *
                FROM [INFORMATION_SCHEMA].[ROUTINES]
                WHERE [ROUTINE_NAME] = 'sp_estimate_data_compression_savings_v2')
