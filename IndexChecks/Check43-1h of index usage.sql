@@ -34,7 +34,7 @@ SET DATEFORMAT MDY
 IF OBJECT_ID('dbo.tmpIndexCheck43') IS NOT NULL
   DROP TABLE dbo.tmpIndexCheck43
 
-DECLARE @Minutes INT = 60 /* By default, capture data for 60 minutes */
+DECLARE @Minutes INT = 5 /* By default, capture data for 60 minutes */
 DECLARE @Database_ID INT, @Cmd NVARCHAR(MAX), @ErrMsg NVARCHAR(MAX)
 
 /* Setting minutes to 1 minute in case I'm running it on my lab. I don't want to wait for a hour.*/

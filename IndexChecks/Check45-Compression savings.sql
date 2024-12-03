@@ -38,7 +38,7 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
 DECLARE @database_name_filter SYSNAME = '' /*set to null to run script in all DBs*/;
-DECLARE @min_rows             BIGINT  = 1000 /*Min of rows on table to be considered on estimation*/;
+DECLARE @min_rows             BIGINT  = 2147483647 /*Min of rows on table to be considered on estimation*/;
 DECLARE @min_mb               BIGINT  = 100 /*100MB*/ /*Min of MBs on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/

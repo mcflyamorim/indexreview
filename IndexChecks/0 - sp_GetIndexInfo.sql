@@ -7,7 +7,7 @@ ALTER PROC dbo.sp_GetIndexInfo
   @database_name_filter NVARCHAR(200) = NULL, /* By default I'm collecting information about all DBs */
   @refreshdata  BIT = 0, /* 1 to force drop/create of index tables, 0 will skip table creation if they already exists */
   @skipcache    BIT = 0, /* use 1 skip plan cache collection*/
-  @skipfrag     BIT = 0  /* use 1 skip fragmentation collection*/
+  @skipfrag     BIT = 1  /* use 1 skip fragmentation collection*/
 )
 /*
 -------------------------------------------------------------------------------
@@ -1108,76 +1108,82 @@ CREATE TABLE dbo.Tab_GetIndexInfo
   plan_cache_reference_count INT
 )
 
-  DECLARE @sqlmajorver INT
-  SET @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff)
+DECLARE @sqlmajorver INT
+SET @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff)
 
-  /*
-    Creating list of DBs we'll collect the information
-  */
-		SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating list of databases to work on.'
-  RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+/*
+  Creating list of DBs we'll collect the information
+*/
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Creating list of databases to work on.'
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
-  IF OBJECT_ID('tempdb.dbo.#tmp_db') IS NOT NULL
-    DROP TABLE #tmp_db
+IF OBJECT_ID('tempdb.dbo.#tmp_db') IS NOT NULL
+  DROP TABLE #tmp_db
 
-  CREATE TABLE #tmp_db ([Database_Name] sysname)
+CREATE TABLE #tmp_db ([Database_Name] sysname)
 
-  /* If this is SQL2012+ and is not running on Amazon RDS or Azure, check AG status */
-  IF (@sqlmajorver >= 11 /*SQL2012*/) AND (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) = 0
-  BEGIN    
-    BEGIN TRY
-      INSERT INTO #tmp_db
-      SELECT d1.[name] 
-      FROM sys.databases d1
-      LEFT JOIN sys.dm_hadr_availability_replica_states hars
-      ON d1.replica_id = hars.replica_id
-      LEFT JOIN sys.availability_replicas ar
-      ON d1.replica_id = ar.replica_id
-      WHERE /* Filtering by the specified DB */
-      (d1.name = @database_name_filter OR ISNULL(@database_name_filter, '') = '')
-      /* I'm not interested to read DBs that are not online :-) */
-      AND d1.state_desc = 'ONLINE'
-      /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
-      AND d1.is_read_only = 0 
-      /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-      AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
-      /* If DB is part of AG, check only DBs that allow connections */
-      AND (  
-           (hars.role_desc = 'PRIMARY' OR hars.role_desc IS NULL)
-           OR 
-           (hars.role_desc = 'SECONDARY' AND ar.secondary_role_allow_connections_desc IN ('READ_ONLY','ALL'))
-          )
-		  END TRY
-		  BEGIN CATCH
-			   SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
-      RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
-      SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
-      RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
-		  END CATCH
-  END
-  /* If running on AmazonRDS or Azure, ignore the AG DMVs */
-  ELSE IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) > 0
-  BEGIN    
-    BEGIN TRY
-      INSERT INTO #tmp_db
-      SELECT d1.[name] 
-      FROM sys.databases d1
-      WHERE /* Filtering by the specified DB */
-      (d1.name = @database_name_filter OR ISNULL(@database_name_filter, '') = '')
-      /* I'm not interested to read DBs that are not online :-) */
-      AND d1.state_desc = 'ONLINE'
-      /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
-      AND d1.is_read_only = 0 
-      /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-      AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
-		  END TRY
-		  BEGIN CATCH
-			   SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
-      RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
-      SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
-      RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
-		  END CATCH
-  END
+/* If this is SQL2012+ and is not running on Amazon RDS or Azure, check AG status */
+IF (@sqlmajorver >= 11 /*SQL2012*/) AND (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) = 0
+BEGIN    
+  BEGIN TRY
+    INSERT INTO #tmp_db
+    SELECT d1.[name] 
+    FROM sys.databases d1
+    LEFT JOIN sys.dm_hadr_availability_replica_states hars
+    ON d1.replica_id = hars.replica_id
+    LEFT JOIN sys.availability_replicas ar
+    ON d1.replica_id = ar.replica_id
+    WHERE /* Filtering by the specified DB */
+    (d1.name = @database_name_filter OR ISNULL(@database_name_filter, '') = '')
+    /* I'm not interested to read DBs that are not online :-) */
+    AND d1.state_desc = 'ONLINE'
+    /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
+    AND d1.is_read_only = 0 
+    /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
+    AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+    /* If DB is part of AG, check only DBs that allow connections */
+    AND (  
+         (hars.role_desc = 'PRIMARY' OR hars.role_desc IS NULL)
+         OR 
+         (hars.role_desc = 'SECONDARY' AND ar.secondary_role_allow_connections_desc IN ('READ_ONLY','ALL'))
+        )
+		END TRY
+		BEGIN CATCH
+			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+    SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+		END CATCH
+END
+/* If running on AmazonRDS or Azure, ignore the AG DMVs */
+ELSE IF (@AmazonRDS + @SQLAzureDB + @SQLAzureManagedInstance) > 0
+BEGIN    
+  BEGIN TRY
+    INSERT INTO #tmp_db
+    SELECT d1.[name] 
+    FROM sys.databases d1
+    WHERE /* Filtering by the specified DB */
+    (d1.name = @database_name_filter OR ISNULL(@database_name_filter, '') = '')
+    /* I'm not interested to read DBs that are not online :-) */
+    AND d1.state_desc = 'ONLINE'
+    /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
+    AND d1.is_read_only = 0 
+    /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
+    AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+		END TRY
+		BEGIN CATCH
+			 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+    SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + ERROR_MESSAGE() 
+    RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
+		END CATCH
+END
+
+DECLARE @ListOfDBs NVARCHAR(MAX) = ''
+SET @ListOfDBs = (SELECT ' -- ' + [Database_Name] + ' -- ' FROM #tmp_db FOR XML PATH(''))
+
+SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'List of DBs: ' + REPLACE(@ListOfDBs, ' --  -- ', ' -- ')
+RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
 DECLARE @SQL VarCHar(MAX)
 declare @Database_Name sysname
@@ -1357,9 +1363,6 @@ BEGIN
   SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to create copy of system tables...''
   RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
 
-  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Collecting index fragmentation info...''
-  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
-
   SET LOCK_TIMEOUT 5000; /*5 seconds*/
   DECLARE @objname sysname, @idxname sysname, @object_id INT, @index_id INT, @row_count VARCHAR(50), @tot INT, @i INT, @size_gb NUMERIC(36, 4)
 
@@ -1392,6 +1395,12 @@ BEGIN
   IF OBJECT_ID(''tempdb.dbo.#tmp_skipfrag'') IS NOT NULL
   BEGIN
     SET @TOPFrag = 0
+  END
+
+  IF @TOPFrag <> 0
+  BEGIN
+    SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Collecting index fragmentation info...''
+    RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
   END
 
   SELECT TOP (@TOPFrag)
@@ -1480,8 +1489,11 @@ BEGIN
   CLOSE c_allrows
   DEALLOCATE c_allrows
 
-  SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to collect index fragmentation info...''
-  RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
+  IF @TOPFrag <> 0
+  BEGIN
+    SET @statusMsg = ''['' + CONVERT(VARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to collect index fragmentation info...''
+    RAISERROR(@statusMsg, 0, 42) WITH NOWAIT;
+  END
 
   SELECT DB_ID() AS database_id,
          DB_NAME() AS ''Database_Name'',
@@ -1710,8 +1722,8 @@ BEGIN
                               FOR XML PATH('''')), 1, 1, '''')
       ) AS p (partition_number, data_compression_desc)
       OUTER APPLY(
-        SELECT SUM(bp.CacheSizeMB) AS CacheSizeMB,
-               SUM(bp.FreeSpaceMB) AS FreeSpaceMB
+        SELECT SUM(ISNULL(bp.CacheSizeMB,0)) AS CacheSizeMB,
+               SUM(ISNULL(bp.FreeSpaceMB,0)) AS FreeSpaceMB
         FROM #tmp_sys_partitions AS p
         INNER JOIN #tmp_sys_allocation_units AS au
             ON au.container_id = p.hobt_id
@@ -1742,14 +1754,14 @@ BEGIN
       ) as t1
       CROSS APPLY
       (
-          SELECT CONVERT(DECIMAL(18, 2), SUM((st.reserved_page_count * 8) / 1024.)) ReservedSizeInMB,
-                 SUM(st.reserved_page_count) AS reserved_page_count,
-                 SUM(st.used_page_count) AS used_page_count,
-                 SUM(st.in_row_data_page_count) AS in_row_data_page_count,
-                 SUM(st.in_row_reserved_page_count) AS in_row_reserved_page_count,
-                 SUM(st.lob_reserved_page_count) AS lob_reserved_page_count,
-                 SUM(st.row_overflow_reserved_page_count) AS row_overflow_reserved_page_count,
-                 ISNULL(SUM(st.row_count), (SELECT SUM(p1.row_count) FROM #tmp_sys_dm_db_partition_stats as p1 WHERE i.object_id = p1.object_id AND p1.index_id <= 1)) AS row_count
+          SELECT CONVERT(DECIMAL(18, 2), SUM((ISNULL(st.reserved_page_count,0) * 8) / 1024.)) ReservedSizeInMB,
+                 SUM(ISNULL(st.reserved_page_count,0)) AS reserved_page_count,
+                 SUM(ISNULL(st.used_page_count,0)) AS used_page_count,
+                 SUM(ISNULL(st.in_row_data_page_count,0)) AS in_row_data_page_count,
+                 SUM(ISNULL(st.in_row_reserved_page_count,0)) AS in_row_reserved_page_count,
+                 SUM(ISNULL(st.lob_reserved_page_count,0)) AS lob_reserved_page_count,
+                 SUM(ISNULL(st.row_overflow_reserved_page_count,0)) AS row_overflow_reserved_page_count,
+                 ISNULL(ISNULL(SUM(st.row_count), (SELECT SUM(p1.row_count) FROM #tmp_sys_dm_db_partition_stats as p1 WHERE i.object_id = p1.object_id AND p1.index_id <= 1)),0) AS row_count
           FROM #tmp_sys_dm_db_partition_stats st
           WHERE i.object_id = st.object_id
                 AND i.index_id = st.index_id
@@ -1805,9 +1817,9 @@ BEGIN
                    AND i.index_id = index_columns.index_id
                    AND index_columns.key_ordinal = 1
                    AND index_columns.is_included_column = 0) AS tab_index_key_column
-       OUTER APPLY (SELECT MAX(Dt) FROM (VALUES(ius.last_user_seek), 
-                                               (ius.last_user_scan),
-                                               (ius.last_user_lookup)
+       OUTER APPLY (SELECT MAX(ISNULL(Dt, ''19000101'')) FROM (VALUES(ius.last_user_seek), 
+                                                                     (ius.last_user_scan),
+                                                                     (ius.last_user_lookup)
                                       ) AS t(Dt)) AS TabIndexUsage(last_datetime_obj_was_used)
   WHERE OBJECTPROPERTY(i.[object_id], ''IsUserTable'') = 1
   ORDER BY tSize.ReservedSizeInMB DESC

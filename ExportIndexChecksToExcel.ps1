@@ -12,6 +12,8 @@
     SQL Server password to connect on SQL Server, if not specified WinAuth will be used.
     .PARAMETER Database
     Specify a specific Database, if not specified it will collect info about all online user DBs.
+    .PARAMETER UserDatabase
+    Specify a specific user database to be used to create internal objects and tables, if not specified it will use tempdb.
     .PARAMETER LogFilePath
     Path I'll use to create the "SQLServerIndexsCheck_<>.xlsx" file with script output, default is $PSScriptRoot
     .LINK
@@ -30,6 +32,7 @@ param
     [String]$UserName,
     [String]$Password,
     [String]$Database = "",
+    [String]$UserDatabase = "tempdb",
     [parameter(Mandatory=$false)]
     [String] $LogFilePath = "C:\Temp\IndexReview",
     [parameter(Mandatory=$false)]
@@ -238,6 +241,7 @@ if ($Password){
     Write-Msg -Message "Password: ********"
 }
 Write-Msg -Message "Database: $Database"
+Write-Msg -Message "UserDatabase: $UserDatabase"
 Write-Msg -Message "LogFilePath: $LogFilePath"
 Write-Msg -Message "Exporting data to $FileOutput"
 Write-Msg -Message "Force_sp_GetIndexInfo_Execution: $Force_sp_GetIndexInfo_Execution"
@@ -538,7 +542,7 @@ else{
 
 try
 {
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
 
 	if (($Result -eq 5 <#Azure DB#>) -or ($Result -eq 8 <#SQL Managed Instance#>)) {
         if ([string]::IsNullOrEmpty($Database)){
@@ -557,15 +561,15 @@ try
         {
             Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
             $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		    Invoke-SqlCmd @Params -ServerInstance $instance -InputFile $TsqlFile -ErrorAction Stop
+		    Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -InputFile $TsqlFile -ErrorAction Stop
 
             #Using -Verbose to capture SQL Server message output
 		    if ($Database){
                 $Query1 = "EXEC dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-                Invoke-SqlCmd @Params -ServerInstance $instance -Query $Query1 -Verbose -ErrorAction Stop
+                Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query $Query1 -Verbose -ErrorAction Stop
             }
             else{
-                Invoke-SqlCmd @Params -ServerInstance $instance -Query "EXEC dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+                Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query "EXEC dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
             }
             Write-Msg "Finished to run sp_GetIndexInfo"
         }
@@ -578,7 +582,7 @@ try
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Query "SELECT ISNULL(OBJECT_ID('dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
+	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query "SELECT ISNULL(OBJECT_ID('dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
 
 	if ($Result -eq 0) {
 		Write-Msg "Could not find table dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
@@ -600,7 +604,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {

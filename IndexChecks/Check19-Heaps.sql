@@ -60,5 +60,4 @@ SELECT * FROM dbo.tmpIndexCheck19
 ORDER BY current_number_of_rows_table DESC, 
          Database_Name,
          Schema_Name,
-         Table_Name,
-         Index_Name
+         Table_Name
