@@ -1,22 +1,22 @@
-IF NOT EXISTS (SELECT *
+IF EXISTS (SELECT *
                FROM [INFORMATION_SCHEMA].[ROUTINES]
                WHERE [ROUTINE_NAME] = 'sp_estimate_data_compression_savings_v2')
-  EXEC ('CREATE PROC dbo.sp_estimate_data_compression_savings_v2 AS SELECT 1');
+      EXEC ('DROP PROC dbo.sp_estimate_data_compression_savings_v2');
 GO
-
-ALTER PROC [dbo].[sp_estimate_data_compression_savings_v2]
+CREATE PROC [dbo].[sp_estimate_data_compression_savings_v2]
 (
   @schema_name          sysname,
   @object_name          sysname,
   @index_id             INT            = NULL,
   @partition_number     INT            = NULL,
-  @data_compression     NVARCHAR(500),       /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
+  @data_compression     NVARCHAR(500), /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
   @max_mb_to_sample     NUMERIC(25, 2) = 50,
-  @batch_sample_size_mb NUMERIC(25, 2) = 5,
-  @compress_column_size BIGINT         = 500 /*Min of column size that shuld be considered for compress, for MAX, use 2147483648*/
+  @batch_sample_size_mb NUMERIC(25, 2) = 10,
+  @compress_column_size BIGINT         = 500, /*Min of column size that shuld be considered for compress, for MAX, use 2147483648*/
+  @auto_change_text_to_varchar_max BIT = 1 /*Change all text/ntext columns to varchar/nvarchar to avoid incompatibility with columnstore*/
 )
 /*
-sp_estimate_data_compression_savings_v2 - April 2023 (v1)
+sp_estimate_data_compression_savings_v2 - Dez 2024
 
 Fabiano Amorim
 http:\\www.blogfabiano.com | fabianonevesamorim@hotmail.com
@@ -514,7 +514,7 @@ BEGIN
 	 --
 	 -- NOEXPAND  is a table hint, this table must be an indexed view.
 	 --			
-	 if (''V'' = (select type from sys.objects where object_id = @object_id))
+	 if (''V'' = (select type from sys.objects with(nolock) where object_id = @object_id))
 	 begin
 		 set @ddl = @ddl + '' with (noexpand)''
 	 end
@@ -530,13 +530,13 @@ BEGIN
 	 end	
 	
 	 declare @table_option_ddl nvarchar(max) = null;
-	 if (''U'' = (select type from sys.objects where object_id = @object_id))
+	 if (''U'' = (select type from sys.objects with(nolock) where object_id = @object_id))
 	 begin		
 		 declare @text_in_row_limit int;
 		 declare @large_value_types_out_of_row bit;
 		
 		 select @text_in_row_limit = text_in_row_limit, @large_value_types_out_of_row = large_value_types_out_of_row
-		 from sys.tables
+		 from sys.tables with(nolock)
 		 where object_id = @object_id;
 
 		 --The ''text_in_row'' parameter for sp_tableoption only applies to text, ntext, and image types.  Without one of 
@@ -547,8 +547,8 @@ BEGIN
 		 begin
 			 set @use_text_in_row = 
 				 (select count(*) --any non zero value converts bit type to 1
-				 from sys.systypes as types 
-				 inner join (select cols.xtype as xtype from sys.syscolumns as cols inner join sys.sysobjects as objs on cols.id = objs.id where objs.id = @object_id) as coltypes 
+				 from sys.systypes as types with(nolock)
+				 inner join (select cols.xtype as xtype from sys.syscolumns as cols with(nolock) inner join sys.sysobjects as objs with(nolock) on cols.id = objs.id where objs.id = @object_id) as coltypes 
 				 on coltypes.xtype = types.xtype 
 				 where types.name = ''ntext'' or types.name = ''text'' or types.name = ''image'');
 		 end
@@ -949,6 +949,7 @@ BEGIN
 			
 			-- set @create_current_index_ddl = @create_current_index_ddl + '')'';
 		 --end;
+
 		 --
 		 -- Compress the table/index with current compression.
 		 --
@@ -1007,14 +1008,13 @@ BEGIN
 
   set @drop_desired_index_ddl = ''drop index '' + quotename(@index_name) + '' on '' + quotename(@sample_table) + '';'';
 
-  -- always setting fill_factor to 100 to avoid useless work as I do not care about it when testing compression
 		set @create_desired_index_ddl = @create_desired_index_ddl
          + '' with (data_compression = ''
-									+ case @desired_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '', fillfactor = 100);'';
+									+ case @desired_compression when 0 then ''none'' when 1 then ''row'' + '', fillfactor = 100'' when 2 then ''page'' + '', fillfactor = 100'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '');'';
 
 		set @create_current_index_ddl = @create_current_index_ddl
          + '' with (data_compression = ''
-									+ case @current_compression when 0 then ''none'' when 1 then ''row'' when 2 then ''page'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '', fillfactor = 100);'';
+									+ case @current_compression when 0 then ''none'' when 1 then ''row'' + '', fillfactor = 100'' when 2 then ''page'' + '', fillfactor = 100'' when 3 then ''columnstore'' else ''columnstore_archive'' end + '');'';
 
   --if @index_type = 1 and @desired_compression not in(3, 4)
   --begin
@@ -1074,7 +1074,7 @@ BEGIN
                        + QUOTENAME(@schema_name) + '.' + QUOTENAME(@object_name) + '(RowCount = '
                        + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, @row_count), 1), '.00', '')
                        + ' | BaseTableSize = ' + CONVERT(VARCHAR(30), @table_size) + 'mb)';
-  RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
   RAISERROR(
     '------------------------------------------------------------------------------------------------------------------------------------------------',
     0,
@@ -1084,7 +1084,7 @@ BEGIN
   BEGIN
     SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                          + 'Specified table partition is empty. Skipping this table';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
     RETURN;
   END;
 
@@ -1094,7 +1094,7 @@ BEGIN
                          + CONVERT(VARCHAR(30), @max_mb_to_sample)
                          + 'mb) parameter is bigger then base table size, @max_mb_to_sample will be set to '
                          + CONVERT(VARCHAR(30), @table_size) + 'mb';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     SET @max_mb_to_sample = @table_size;
     IF @batch_sample_size_mb > @max_mb_to_sample
@@ -1313,8 +1313,11 @@ BEGIN
     [sample_size_with_current_compression_setting(KB)]   BIGINT,
     [sample_size_with_requested_compression_setting(KB)] BIGINT,
     [sample_compressed_page_count]                       BIGINT,
-    [sample_pages_with_current_compression_setting]      BIGINT,
-    [sample_pages_with_requested_compression_setting]    BIGINT
+    [pages_with_current_compression_setting]             BIGINT,
+    [pages_with_requested_compression_setting]           BIGINT,
+    [seconds_to_populate_table_sample]                   NUMERIC(25,4),
+    [seconds_to_apply_compression]                       NUMERIC(25,4),
+    [time_estimated_to_apply_compression_h_m_s]          VARCHAR(20)
   );
 
   --
@@ -1322,6 +1325,10 @@ BEGIN
   -- Iteration does not have to be in any particular order, the results table will sort that out
   --
   DECLARE @sample_percent NUMERIC(25, 4);
+  DECLARE @seconds_to_populate_table_sample NUMERIC(25,4) = 0
+  DECLARE @seconds_to_apply_compression NUMERIC(25,4) = 0
+  DECLARE @time_estimated_to_apply_compression_h_m_s VARCHAR(20)
+  DECLARE @dt_start DATETIME
 
   DECLARE [c] CURSOR LOCAL FAST_FORWARD FOR
   SELECT [partition_column_id],
@@ -1386,9 +1393,11 @@ BEGIN
       0,
       0) WITH NOWAIT;
 
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to populate table sample - ' + @fqn + ('(partition_number = ' + CONVERT(VARCHAR(30), @curr_partition_number) + ')');
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to create the table sample #sample_tableDBA05385A6FF40F888204D05C7D56D2B.';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    SET @dt_start = GETDATE();
+    SET @seconds_to_populate_table_sample = 0
 
     -- Step 1. Create the sample table in current scope
     -- 
@@ -1397,32 +1406,29 @@ BEGIN
       [dummyDBA05385A6FF40F888204D05C7D56D2B] INT
     );
 
+
+    IF @auto_change_text_to_varchar_max = 1
+    BEGIN
+      SET @alter_ddl = REPLACE(@alter_ddl, '[text]', '[VARCHAR](MAX)')
+      SET @alter_ddl = REPLACE(@alter_ddl, '[ntext]', '[NVARCHAR](MAX)')
+    END
+
+    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Adding columns into the table sample - ' + @alter_ddl;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
     -- Step 2. Add columns into sample table
     -- 
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Adding columns to the table sample.';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + @alter_ddl;
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
-
     EXEC (@alter_ddl);
 
     ALTER TABLE [#sample_tableDBA05385A6FF40F888204D05C7D56D2B] REBUILD;
 
-    IF ISNULL(@table_option_ddl, '') <> ''
+    IF ISNULL(@table_option_ddl,'') <> ''
     BEGIN
-      SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Executing table options to the table sample.';
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
-      SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + @table_option_ddl;
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+      SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Executing table_option_ddl command - ' + @table_option_ddl;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       EXEC (@table_option_ddl);
     END
-
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to create the table sample #sample_tableDBA05385A6FF40F888204D05C7D56D2B.';
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
-
-    SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to populate table sample - ' + @fqn + ('(partition_number = ' + CONVERT(VARCHAR(30), @curr_partition_number) + ')');
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
 
     DECLARE @sample_table_object_id INT = OBJECT_ID('tempdb.dbo.#sample_tableDBA05385A6FF40F888204D05C7D56D2B');
 
@@ -1448,10 +1454,10 @@ BEGIN
                         'tablesample (' + CONVERT(VARCHAR(30), @number_percent_sample_batch) + ' percent)');
 
     SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
-                         + 'Populating table sample, current table size = 0' + 'mb (target = '
+                         + 'Populating table sample, Current index size = 0' + 'mb (target = '
                          + CONVERT(VARCHAR(30), @max_mb_to_sample) + 'mb), '
                          + 'insert_dll = ' + @insert_ddl;
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     -- @insert_ddl
     EXEC (@insert_ddl);
@@ -1461,10 +1467,10 @@ BEGIN
     WHERE [object_id] = @sample_table_object_id;
 
     SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
-                         + 'Populating table sample, current table size = ' + CONVERT(VARCHAR(30), @current_size_batch)
+                         + 'Populating table sample, Current index size = ' + CONVERT(VARCHAR(30), @current_size_batch)
                          + 'mb (target = ' + CONVERT(VARCHAR(30), @max_mb_to_sample) + 'mb), '
                          + 'insert_dll = ' + @insert_ddl;
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
     IF @sample_percent = 100.00
        OR @max_mb_to_sample = @batch_sample_size_mb
@@ -1484,11 +1490,11 @@ BEGIN
       WHERE [object_id] = @sample_table_object_id;
 
       SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
-                           + 'Populating table sample, current table size = '
+                           + 'Populating table sample, Current index size = '
                            + CONVERT(VARCHAR(30), @current_size_batch) + 'mb (target = '
                            + CONVERT(VARCHAR(30), @max_mb_to_sample) + 'mb), '
                            + 'insert_dll = ' + @insert_ddl;
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       -- Break if we hit the max_mb_to_sample limit size
       IF @current_size_batch >= @max_mb_to_sample
@@ -1498,7 +1504,9 @@ BEGIN
     END;
 
     SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to populate table sample - ' + @fqn + ('(partition_number = ' + CONVERT(VARCHAR(30), @curr_partition_number) + ')');
-    RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
+    SET @seconds_to_populate_table_sample = CONVERT(NUMERIC(25,4), DATEDIFF(MILLISECOND, @dt_start, GETDATE()) / 1000.)
 
     --
     -- Step 3.   Inner Loop:
@@ -1619,7 +1627,10 @@ BEGIN
       SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Starting to apply '
                            + @desired_compression_desc + ' compression on index ' + QUOTENAME(@index_name) + '('
                            + QUOTENAME(DB_NAME()) + '.' + QUOTENAME(@schema_name) + '.' + QUOTENAME(@object_name) + ')';
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
+      SET @dt_start = GETDATE();
+      SET @seconds_to_apply_compression = 0
 
       IF @v_control_current_index_creation = 1
       --AND ((@curr_index_id = 0 AND @current_compression_desc <> 'NONE') OR (@curr_index_id <> 0))
@@ -1632,7 +1643,7 @@ BEGIN
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                + 'Creating current index on sample table, ' + 'create_current_index_ddl = '
                                + @create_current_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           EXEC (@create_current_index_ddl);
 
           SET @sample_index_id = (SELECT TOP 1
@@ -1652,13 +1663,13 @@ BEGIN
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                + 'Error while trying to create current index on sample table. Skipping this index. '
                                + 'create_current_index_ddl = ' + @create_current_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           SET @estimation_status = N'Error - Error while trying to create current index on sample table. Skipping this index. '
                                    + N'create_current_index_ddl = ' + @create_current_index_ddl + CHAR(13) + CHAR(10)
                                    + N'; Error: ' + ERROR_MESSAGE();
 
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END CATCH;
       END;
 
@@ -1673,7 +1684,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Desired compression is same as current compression, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Desired compression is same as current compression, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1686,7 +1697,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'COMPRESS function is only available on SQL2016+, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - COMPRESS function is only available on SQL2016+, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1699,7 +1710,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'COLUMNSTORE_ARCHIVE compression is only available on SQL2014+, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - COLUMNSTORE_ARCHIVE compression is only available on SQL2014+, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1712,7 +1723,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Clustered ColumnStore index is only available on SQL2014+, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Clustered ColumnStore index is only available on SQL2014+, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1725,7 +1736,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Nonclustered ColumnStore index is only available on SQL2012+, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Nonclustered ColumnStore index is only available on SQL2012+, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1739,37 +1750,45 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Filtered Nonclustered ColumnStore index is only available on SQL2016+, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Filtered Nonclustered ColumnStore index is only available on SQL2016+, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
       END
 
+      DECLARE @column_limitation_for_columnstore VARCHAR(MAX) = NULL
+
+      SET @column_limitation_for_columnstore = 
+      STUFF((SELECT ' | ' + 'ColName = ' + name + ', Type = ' + (SELECT TOP 1 name FROM sys.types WHERE columns.system_type_id = types.system_type_id)
+       FROM [sys].[columns]
+       WHERE [object_id] = @object_id
+             AND (
+                 /*SQL2016- limitations for Clustered ColumnStore*/
+                 (@sqlmajorver <= 13 /*SQL2016*/
+                  AND [max_length] = -1
+                  AND [system_type_id] IN (231 /*nvarchar*/, 167 /*varchar*/, 165 /*varbinary*/, 36 /*uniqueidentifier*/))
+                 OR
+                 /*SQL2017- limitations for Clustered ColumnStore*/
+                 (@sqlmajorver < 14 /*SQL2017*/
+                  AND [system_type_id] IN (36 /*uniqueidentifier*/))
+                 OR
+                 ([system_type_id] IN (99 /*ntext*/, 35 /*text*/) AND @auto_change_text_to_varchar_max = 0)
+                 OR 
+                 /*Limitations for Clustered ColumnStore, all versions*/
+                 ([system_type_id] IN (34, /*image*/
+                                       189 /*timestamp and rowversion*/, 98, /*sql_variant*/
+                                       240 /*CLR types (hierarchyid and spatial types)*/, 241 /*XML*/)))
+         FOR XML PATH('')), 1, 3, '')
+
       /*Datatype limitations for ColumnStore*/
       IF @create_desired_index_ddl LIKE '%create clustered columnstore index%'
          AND @desired_compression_desc LIKE 'COLUMNSTORE%'
-         AND EXISTS (SELECT *
-                     FROM [sys].[columns]
-                     WHERE [object_id] = @object_id
-                           AND (
-                               /*SQL2016- limitations for Clustered ColumnStore*/
-                               (@sqlmajorver <= 13 /*SQL2016*/
-                                AND [max_length] = -1
-                                AND [system_type_id] IN (231 /*nvarchar*/, 167 /*varchar*/, 165 /*varbinary*/, 36 /*uniqueidentifier*/))
-                               OR
-                               /*SQL2017- limitations for Clustered ColumnStore*/
-                               (@sqlmajorver < 14 /*SQL2017*/
-                                AND [system_type_id] IN (36 /*uniqueidentifier*/))
-                               OR
-                               /*Limitations for Clustered ColumnStore, all versions*/
-                               ([system_type_id] IN (99 /*ntext*/, 35 /*text*/, 34,                         /*image*/
-                                                     189 /*timestamp and rowversion*/, 98,                  /*sql_variant*/
-                                                     240 /*CLR types (hierarchyid and spatial types)*/, 241 /*XML*/))))
+         AND @column_limitation_for_columnstore IS NOT NULL
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
-                             + 'Table has columns using unsupported data type for ColumnStore, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
-        SET @estimation_status = N'Skipped - Table has columns using unsupported data type for ColumnStore, skipping this test.';
+                             + 'Table has columns(' + @column_limitation_for_columnstore + ') using unsupported data type for ColumnStore, skipping this test.';
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+        SET @estimation_status = N'Skipped - Table has columns (' + @column_limitation_for_columnstore + ') using unsupported data type for ColumnStore, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
       END;
@@ -1787,7 +1806,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Table has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Table has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1808,7 +1827,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Index has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @estimation_status = N'Skipped - Index has persisted computed columns, columnstore index cannot include a computed column implicitly or explicitly, skipping this test.';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
@@ -1820,7 +1839,7 @@ BEGIN
       BEGIN
         SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                              + 'Compress only applies for HEAP and Clustered indexes, skipping this test.';
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         SET @sample_compressed_desired = 0;
         SET @estimation_status = N'Skipped - Compress only applies for HEAP and Clustered indexes, skipping this test.';
         GOTO MOVENEXT;
@@ -1854,7 +1873,7 @@ BEGIN
           BEGIN
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                  + 'Table doesn''t have columns elegible for COMPRESS, skipping this test.';
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             SET @estimation_status = N'Skipped - Table doesn''t have columns elegible for COMPRESS, skipping this test.';
             SET @sample_compressed_desired = 0;
             GOTO MOVENEXT;
@@ -1882,7 +1901,7 @@ BEGIN
 
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                + 'Populating table sample using compress function, ' + 'insert_ddl = ' + @insert_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
           EXEC (@insert_ddl);
 
@@ -1895,21 +1914,21 @@ BEGIN
           WHERE [object_id] = @sample_table_object_id_compress;
 
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
-                               + 'Finished to populate table sample using compress function, current table size = '
+                               + 'Finished to populate table sample using compress function, Current index size = '
                                + CONVERT(VARCHAR(30), @current_size_batch) + 'mb.';
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END TRY
         BEGIN CATCH
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                + 'Error while trying to apply COMPRESS on sample table. Skipping this index. '
                                + 'insert_ddl = ' + @insert_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           SET @estimation_status = N'Error - Error while trying to apply COMPRESS on sample table. Skipping this index. '
                                    + N'insert_ddl = ' + @insert_ddl + CHAR(13) + CHAR(10) + N'; Error: '
                                    + ERROR_MESSAGE();
 
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
         END CATCH;
 
         SELECT @sample_compressed_desired = [used_page_count]
@@ -1944,7 +1963,7 @@ BEGIN
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                    + 'Running command to drop desired index on sample table. '
                                    + 'drop_desired_index_ddl = ' + @drop_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
               EXEC (@drop_desired_index_ddl);
             END TRY
@@ -1952,16 +1971,16 @@ BEGIN
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                    + 'Error while trying to drop desired index on sample table. '
                                    + 'drop_desired_index_ddl = ' + @drop_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             END CATCH;
           END;
 
           SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                + 'Creating desired index on sample table, ' + 'create_desired_index_ddl = '
                                + @create_desired_index_ddl;
-          RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+          RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
           EXEC (@create_desired_index_ddl);
 
@@ -1987,7 +2006,7 @@ BEGIN
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                    + 'Index doesn''t exist, re-executing command without drop_existing=on, '
                                    + 'create_desired_index_ddl = ' + @create_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
               EXEC (@create_desired_index_ddl);
 
@@ -2007,12 +2026,12 @@ BEGIN
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                    + 'Error while trying to re-execute command to create desired compression index on sample table. Skipping this index. '
                                    + 'create_desired_index_ddl = ' + @create_desired_index_ddl;
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
               SET @estimation_status = +N'Error - Error while trying to re-execute command to create desired compression index on sample table. Skipping this index. '
                                        + N'create_desired_index_ddl = ' + @create_desired_index_ddl + CHAR(13)
                                        + CHAR(10) + N'; Error: ' + ERROR_MESSAGE();;
               SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-              RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+              RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             END CATCH;
           END;
           ELSE
@@ -2020,10 +2039,10 @@ BEGIN
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                  + 'Error while trying to create desired compression index on sample table. Skipping this index. '
                                  + 'create_desired_index_ddl = ' + @create_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           END;
         END CATCH;
 
@@ -2058,7 +2077,7 @@ BEGIN
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                  + 'Running command to drop desired index on sample table. '
                                  + 'drop_desired_index_ddl = ' + @drop_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
             EXEC (@drop_desired_index_ddl);
             SET @require_drop_desired_index = 0;
@@ -2067,13 +2086,13 @@ BEGIN
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - '
                                  + 'Error while trying to drop desired index on sample table. Skipping this index. '
                                  + 'drop_desired_index_ddl = ' + @drop_desired_index_ddl;
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
             SET @estimation_status = N'Error - Error while trying to drop desired index on sample table. Skipping this index. '
                                      + N'drop_desired_index_ddl = ' + @drop_desired_index_ddl + CHAR(13) + CHAR(10)
                                      + N'; Error: ' + ERROR_MESSAGE();;
 
             SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error: ' + ERROR_MESSAGE();
-            RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+            RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
           END CATCH;
         END;
       END;
@@ -2118,6 +2137,14 @@ BEGIN
                                  + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_desired * 8) + 'kb', 'NA');
       END;
 
+      DECLARE @ms_to_apply_compression NUMERIC(25,4) = NULL
+      DECLARE @ms NUMERIC(25,4) = NULL
+
+      SET @ms_to_apply_compression = DATEDIFF(MILLISECOND, @dt_start, GETDATE())
+      SET @seconds_to_apply_compression = CONVERT(NUMERIC(25,4), @ms_to_apply_compression / 1000.)
+      SET @ms = @current_size * (@ms_to_apply_compression / @sample_compressed_current)
+      SET @time_estimated_to_apply_compression_h_m_s = CONVERT(VARCHAR(20), DATEADD(s, ((@ms) / 1000), 0), 108)
+
       INSERT INTO [#estimated_results]
       (
         [database_name],
@@ -2140,33 +2167,39 @@ BEGIN
         [sample_size_with_current_compression_setting(KB)],
         [sample_size_with_requested_compression_setting(KB)],
         [sample_compressed_page_count],
-        [sample_pages_with_current_compression_setting],
-        [sample_pages_with_requested_compression_setting]
+        [pages_with_current_compression_setting],
+        [pages_with_requested_compression_setting],
+        [seconds_to_populate_table_sample],
+        [seconds_to_apply_compression],
+        [time_estimated_to_apply_compression_h_m_s]
       )
       VALUES
       (
-        DB_NAME(),                                                                                         -- database_name - sysname
-        @object_name,                                                                                      -- object_name - sysname
-        @schema_name,                                                                                      -- schema_name - sysname
-        @curr_index_id,                                                                                    -- index_id - int
-        @index_name,                                                                                       -- index_name - sysname
-        @curr_index_type_desc,                                                                             -- index_type_desc - NVARCHAR(60)
-        @curr_partition_number,                                                                            -- partition_number - int
-        @estimation_status,                                                                                -- estimation_status - nvarchar(4000)
-        @current_compression_desc,                                                                         -- current_data_compression - nvarchar(60)
-        @desired_compression_desc,                                                                         -- estimated_data_compression - nvarchar(60)
-        CONVERT(NUMERIC(25, 2), 100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8)))), -- compression_ratio - numeric(25, 2)
-        @row_count,                                                                                        -- row_count - bigint
-        (@current_size * 8) / 1024. / 1024.,                                                               -- size_with_current_compression_setting(GB) - numeric(25, 2)
-        (@estimated_compressed_size * 8) / 1024. / 1024.,                                                  -- size_with_requested_compression_setting(GB) - numeric(25, 2)
-        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.),        -- size_compression_saving(GB) - numeric(25, 2)
-        @current_size * 8,                                                                                 -- size_with_current_compression_setting(KB) - bigint
-        @estimated_compressed_size * 8,                                                                    -- size_with_requested_compression_setting(KB) - bigint
-        @sample_compressed_current * 8,                                                                    -- sample_size_with_current_compression_setting(KB) - bigint
-        @sample_compressed_desired * 8,                                                                    -- sample_size_with_requested_compression_setting(KB) - bigint
-        @sample_compressed_desired,                                                                        -- sample_compressed_page_count bigint
-        @current_size,                                                                                     -- sample_pages_with_current_compression_setting - bigint
-        @estimated_compressed_size                                                                         -- sample_pages_with_requested_compression_setting - bigint
+        DB_NAME(),                                                                                          -- database_name - sysname
+        @object_name,                                                                                       -- object_name - sysname
+        @schema_name,                                                                                       -- schema_name - sysname
+        @curr_index_id,                                                                                     -- index_id - int
+        @index_name,                                                                                        -- index_name - sysname
+        @curr_index_type_desc,                                                                              -- index_type_desc - NVARCHAR(60)
+        @curr_partition_number,                                                                             -- partition_number - int
+        @estimation_status,                                                                                 -- estimation_status - nvarchar(4000)
+        @current_compression_desc,                                                                          -- current_data_compression - nvarchar(60)
+        @desired_compression_desc,                                                                          -- estimated_data_compression - nvarchar(60)
+        CONVERT(NUMERIC(25, 2), 100 - ((@estimated_compressed_size * 8) * 100.0 / ((@current_size * 8)))),  -- compression_ratio - numeric(25, 2)
+        @row_count,                                                                                         -- row_count - bigint
+        (@current_size * 8) / 1024. / 1024.,                                                                -- size_with_current_compression_setting(GB) - numeric(25, 2)
+        (@estimated_compressed_size * 8) / 1024. / 1024.,                                                   -- size_with_requested_compression_setting(GB) - numeric(25, 2)
+        ((@current_size * 8) / 1024. / 1024.) - ((@estimated_compressed_size * 8) / 1024. / 1024.),         -- size_compression_saving(GB) - numeric(25, 2)
+        @current_size * 8,                                                                                  -- size_with_current_compression_setting(KB) - bigint
+        @estimated_compressed_size * 8,                                                                     -- size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_current * 8,                                                                     -- sample_size_with_current_compression_setting(KB) - bigint
+        @sample_compressed_desired * 8,                                                                     -- sample_size_with_requested_compression_setting(KB) - bigint
+        @sample_compressed_desired,                                                                         -- sample_compressed_page_count bigint
+        @current_size,                                                                                      -- pages_with_current_compression_setting - bigint
+        @estimated_compressed_size,                                                                         -- pages_with_requested_compression_setting - bigint
+        @seconds_to_populate_table_sample,                                                                  -- seconds_to_populate_table_sample - numeric(25,4),
+        @seconds_to_apply_compression,                                                                      -- seconds_to_apply_compression - numeric(25,4)
+        @time_estimated_to_apply_compression_h_m_s                                                          -- time_estimated_to_apply_compression_h_m_s - varchar(20)
       );
 
       IF @estimated_compressed_size IS NOT NULL
@@ -2181,14 +2214,14 @@ BEGIN
                              + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_current * 8) + 'kb', 'NA')
                              + ', Compressed size = '
                              + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_desired * 8) + 'kb', 'NA');
-        RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+        RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
       END;
 
 
       SELECT @status_msg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Finished to apply '
                            + @desired_compression_desc + ' compression on index ' + QUOTENAME(@index_name) + '('
                            + QUOTENAME(DB_NAME()) + '.' + QUOTENAME(@schema_name) + '.' + QUOTENAME(@object_name) + ')';
-      RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
       FETCH NEXT FROM [index_partition_cursor]
       INTO @curr_index_id,
@@ -2247,9 +2280,9 @@ BEGIN
   CLOSE [c];
   DEALLOCATE [c];
 
-  IF OBJECT_ID('tempdb.dbo.tmpIndexCheck45_CompressionResult') IS NOT NULL
+  IF OBJECT_ID('tempdb.dbo.##tmpIndexCheck45_CompressionResult') IS NOT NULL
   BEGIN
-    INSERT INTO tempdb.dbo.tmpIndexCheck45_CompressionResult
+    INSERT INTO ##tmpIndexCheck45_CompressionResult
     SELECT *
     FROM [#estimated_results]
     WHERE estimated_data_compression IN (SELECT col_data_compression FROM #tmp_data_compression);
@@ -2274,7 +2307,7 @@ BEGIN
                        + QUOTENAME(@schema_name) + '.' + QUOTENAME(@object_name) + '(RowCount = '
                        + REPLACE(CONVERT(VARCHAR(30), CONVERT(MONEY, @row_count), 1), '.00', '')
                        + ' | BaseTableSize = ' + CONVERT(VARCHAR(30), @table_size) + 'mb)';
-  RAISERROR(@status_msg, 0, 0) WITH NOWAIT;
+  RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
   RAISERROR(
     '------------------------------------------------------------------------------------------------------------------------------------------------',
     0,

@@ -38,7 +38,7 @@ SET LOCK_TIMEOUT 1000; /*if I get blocked for more than 1 sec I'll quit, I don't
 /* ------------------------------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------------------------------ */
 DECLARE @database_name_filter SYSNAME = '' /*set to null to run script in all DBs*/;
-DECLARE @min_rows             BIGINT  = 2147483647 /*Min of rows on table to be considered on estimation*/;
+DECLARE @min_rows             BIGINT  = 1000 /*Min of rows on table to be considered on estimation*/;
 DECLARE @min_mb               BIGINT  = 100 /*100MB*/ /*Min of MBs on table to be considered on estimation*/;
 
 /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
@@ -93,8 +93,11 @@ CREATE TABLE ##tmpIndexCheck45_CompressionResult
   [sample_size_with_current_compression_setting(KB)]   BIGINT,
   [sample_size_with_requested_compression_setting(KB)] BIGINT,
   [sample_compressed_page_count]                       BIGINT,
-  [sample_pages_with_current_compression_setting]      BIGINT,
-  [sample_pages_with_requested_compression_setting]    BIGINT
+  [pages_with_current_compression_setting]             BIGINT,
+  [pages_with_requested_compression_setting]           BIGINT,
+  [seconds_to_populate_table_sample]                   NUMERIC(25,4),
+  [seconds_to_apply_compression]                       NUMERIC(25,4),
+  [time_estimated_to_apply_compression_h_m_s]          VARCHAR(20)
 );
 
 DECLARE @statusMsg VARCHAR(8000);
@@ -125,7 +128,7 @@ BEGIN TRY
   /* I'm not sure if info about read_only DBs would be useful, I'm ignoring it until someone convince me otherwise. */
   AND d1.is_read_only = 0 
   /* Not interested to read data about Microsoft stuff, those DBs are already tuned by Microsoft experts, so, no need to tune it, right? ;P */
-  AND d1.name not in ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
+  AND d1.name NOT IN ('tempdb', 'master', 'model', 'msdb') AND d1.is_distributor = 0
 END TRY
 BEGIN CATCH
 		SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Error trying to create list of databases.'
@@ -182,13 +185,14 @@ CREATE PROC [dbo].[sp_estimate_data_compression_savings_v2]
   @object_name          sysname,
   @index_id             INT            = NULL,
   @partition_number     INT            = NULL,
-  @data_compression     NVARCHAR(500),       /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
+  @data_compression     NVARCHAR(500), /*NONE, ROW, PAGE, COLUMNSTORE, COLUMNSTORE_ARCHIVE, COMPRESS*/
   @max_mb_to_sample     NUMERIC(25, 2) = 50,
-  @batch_sample_size_mb NUMERIC(25, 2) = 5,
-  @compress_column_size BIGINT         = 500 /*Min of column size that shuld be considered for compress, for MAX, use 2147483648*/
+  @batch_sample_size_mb NUMERIC(25, 2) = 10,
+  @compress_column_size BIGINT         = 500, /*Min of column size that shuld be considered for compress, for MAX, use 2147483648*/
+  @auto_change_text_to_varchar_max BIT = 1 /*Change all text/ntext columns to varchar/nvarchar to avoid incompatibility with columnstore*/
 )
 /*
-sp_estimate_data_compression_savings_v2 - April 2023 (v1)
+sp_estimate_data_compression_savings_v2 - Dez 2024
 
 Fabiano Amorim
 http:\\www.blogfabiano.com | fabianonevesamorim@hotmail.com
@@ -1485,8 +1489,11 @@ BEGIN
     [sample_size_with_current_compression_setting(KB)]   BIGINT,
     [sample_size_with_requested_compression_setting(KB)] BIGINT,
     [sample_compressed_page_count]                       BIGINT,
-    [sample_pages_with_current_compression_setting]      BIGINT,
-    [sample_pages_with_requested_compression_setting]    BIGINT
+    [pages_with_current_compression_setting]             BIGINT,
+    [pages_with_requested_compression_setting]           BIGINT,
+    [seconds_to_populate_table_sample]                   NUMERIC(25,4),
+    [seconds_to_apply_compression]                       NUMERIC(25,4),
+    [time_estimated_to_apply_compression_h_m_s]          VARCHAR(20)
   );
 
   --
@@ -1494,6 +1501,10 @@ BEGIN
   -- Iteration does not have to be in any particular order, the results table will sort that out
   --
   DECLARE @sample_percent NUMERIC(25, 4);
+  DECLARE @seconds_to_populate_table_sample NUMERIC(25,4) = 0
+  DECLARE @seconds_to_apply_compression NUMERIC(25,4) = 0
+  DECLARE @time_estimated_to_apply_compression_h_m_s VARCHAR(20)
+  DECLARE @dt_start DATETIME
 
   DECLARE [c] CURSOR LOCAL FAST_FORWARD FOR
   SELECT [partition_column_id],
@@ -1561,6 +1572,9 @@ BEGIN
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Starting to populate table sample - '' + @fqn + (''(partition_number = '' + CONVERT(VARCHAR(30), @curr_partition_number) + '')'');
     RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
 
+    SET @dt_start = GETDATE();
+    SET @seconds_to_populate_table_sample = 0
+
     -- Step 1. Create the sample table in current scope
     -- 
     CREATE TABLE [#sample_tableDBA05385A6FF40F888204D05C7D56D2B]
@@ -1568,13 +1582,29 @@ BEGIN
       [dummyDBA05385A6FF40F888204D05C7D56D2B] INT
     );
 
+
+    IF @auto_change_text_to_varchar_max = 1
+    BEGIN
+      SET @alter_ddl = REPLACE(@alter_ddl, ''[text]'', ''[VARCHAR](MAX)'')
+      SET @alter_ddl = REPLACE(@alter_ddl, ''[ntext]'', ''[NVARCHAR](MAX)'')
+    END
+
+    SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Adding columns into the table sample - '' + @alter_ddl;
+    RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
     -- Step 2. Add columns into sample table
     -- 
     EXEC (@alter_ddl);
 
     ALTER TABLE [#sample_tableDBA05385A6FF40F888204D05C7D56D2B] REBUILD;
 
-    EXEC (@table_option_ddl);
+    IF ISNULL(@table_option_ddl,'''') <> ''''
+    BEGIN
+      SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Executing table_option_ddl command - '' + @table_option_ddl;
+      RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
+      EXEC (@table_option_ddl);
+    END
 
     DECLARE @sample_table_object_id INT = OBJECT_ID(''tempdb.dbo.#sample_tableDBA05385A6FF40F888204D05C7D56D2B'');
 
@@ -1651,6 +1681,8 @@ BEGIN
 
     SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - '' + ''Finished to populate table sample - '' + @fqn + (''(partition_number = '' + CONVERT(VARCHAR(30), @curr_partition_number) + '')'');
     RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
+    SET @seconds_to_populate_table_sample = CONVERT(NUMERIC(25,4), DATEDIFF(MILLISECOND, @dt_start, GETDATE()) / 1000.)
 
     --
     -- Step 3.   Inner Loop:
@@ -1772,6 +1804,9 @@ BEGIN
                            + @desired_compression_desc + '' compression on index '' + QUOTENAME(@index_name) + ''(''
                            + QUOTENAME(DB_NAME()) + ''.'' + QUOTENAME(@schema_name) + ''.'' + QUOTENAME(@object_name) + '')'';
       RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
+
+      SET @dt_start = GETDATE();
+      SET @seconds_to_apply_compression = 0
 
       IF @v_control_current_index_creation = 1
       --AND ((@curr_index_id = 0 AND @current_compression_desc <> ''NONE'') OR (@curr_index_id <> 0))
@@ -1897,31 +1932,39 @@ BEGIN
         GOTO MOVENEXT;
       END
 
+      DECLARE @column_limitation_for_columnstore VARCHAR(MAX) = NULL
+
+      SET @column_limitation_for_columnstore = 
+      STUFF((SELECT '' | '' + ''ColName = '' + name + '', Type = '' + (SELECT TOP 1 name FROM sys.types WHERE columns.system_type_id = types.system_type_id)
+       FROM [sys].[columns]
+       WHERE [object_id] = @object_id
+             AND (
+                 /*SQL2016- limitations for Clustered ColumnStore*/
+                 (@sqlmajorver <= 13 /*SQL2016*/
+                  AND [max_length] = -1
+                  AND [system_type_id] IN (231 /*nvarchar*/, 167 /*varchar*/, 165 /*varbinary*/, 36 /*uniqueidentifier*/))
+                 OR
+                 /*SQL2017- limitations for Clustered ColumnStore*/
+                 (@sqlmajorver < 14 /*SQL2017*/
+                  AND [system_type_id] IN (36 /*uniqueidentifier*/))
+                 OR
+                 ([system_type_id] IN (99 /*ntext*/, 35 /*text*/) AND @auto_change_text_to_varchar_max = 0)
+                 OR 
+                 /*Limitations for Clustered ColumnStore, all versions*/
+                 ([system_type_id] IN (34, /*image*/
+                                       189 /*timestamp and rowversion*/, 98, /*sql_variant*/
+                                       240 /*CLR types (hierarchyid and spatial types)*/, 241 /*XML*/)))
+         FOR XML PATH('''')), 1, 3, '''')
+
       /*Datatype limitations for ColumnStore*/
       IF @create_desired_index_ddl LIKE ''%create clustered columnstore index%''
          AND @desired_compression_desc LIKE ''COLUMNSTORE%''
-         AND EXISTS (SELECT *
-                     FROM [sys].[columns]
-                     WHERE [object_id] = @object_id
-                           AND (
-                               /*SQL2016- limitations for Clustered ColumnStore*/
-                               (@sqlmajorver <= 13 /*SQL2016*/
-                                AND [max_length] = -1
-                                AND [system_type_id] IN (231 /*nvarchar*/, 167 /*varchar*/, 165 /*varbinary*/, 36 /*uniqueidentifier*/))
-                               OR
-                               /*SQL2017- limitations for Clustered ColumnStore*/
-                               (@sqlmajorver < 14 /*SQL2017*/
-                                AND [system_type_id] IN (36 /*uniqueidentifier*/))
-                               OR
-                               /*Limitations for Clustered ColumnStore, all versions*/
-                               ([system_type_id] IN (99 /*ntext*/, 35 /*text*/, 34,                         /*image*/
-                                                     189 /*timestamp and rowversion*/, 98,                  /*sql_variant*/
-                                                     240 /*CLR types (hierarchyid and spatial types)*/, 241 /*XML*/))))
+         AND @column_limitation_for_columnstore IS NOT NULL
       BEGIN
         SELECT @status_msg = ''['' + CONVERT(NVARCHAR(200), GETDATE(), 120) + ''] - ''
-                             + ''Table has columns using unsupported data type for ColumnStore, skipping this test.'';
+                             + ''Table has columns('' + @column_limitation_for_columnstore + '') using unsupported data type for ColumnStore, skipping this test.'';
         RAISERROR(@status_msg, 0, 0) WITH NOWAIT; INSERT INTO dbo.tmpIndexCheckMonitoring_Log(cStatus) VALUES(@status_msg);
-        SET @estimation_status = N''Skipped - Table has columns using unsupported data type for ColumnStore, skipping this test.'';
+        SET @estimation_status = N''Skipped - Table has columns ('' + @column_limitation_for_columnstore + '') using unsupported data type for ColumnStore, skipping this test.'';
         SET @sample_compressed_desired = 0;
         GOTO MOVENEXT;
       END;
@@ -2270,6 +2313,14 @@ BEGIN
                                  + ISNULL(CONVERT(VARCHAR(30), @sample_compressed_desired * 8) + ''kb'', ''NA'');
       END;
 
+      DECLARE @ms_to_apply_compression NUMERIC(25,4) = NULL
+      DECLARE @ms NUMERIC(25,4) = NULL
+
+      SET @ms_to_apply_compression = DATEDIFF(MILLISECOND, @dt_start, GETDATE())
+      SET @seconds_to_apply_compression = CONVERT(NUMERIC(25,4), @ms_to_apply_compression / 1000.)
+      SET @ms = @current_size * (@ms_to_apply_compression / @sample_compressed_current)
+      SET @time_estimated_to_apply_compression_h_m_s = CONVERT(VARCHAR(20), DATEADD(s, ((@ms) / 1000), 0), 108)
+
       INSERT INTO [#estimated_results]
       (
         [database_name],
@@ -2292,8 +2343,11 @@ BEGIN
         [sample_size_with_current_compression_setting(KB)],
         [sample_size_with_requested_compression_setting(KB)],
         [sample_compressed_page_count],
-        [sample_pages_with_current_compression_setting],
-        [sample_pages_with_requested_compression_setting]
+        [pages_with_current_compression_setting],
+        [pages_with_requested_compression_setting],
+        [seconds_to_populate_table_sample],
+        [seconds_to_apply_compression],
+        [time_estimated_to_apply_compression_h_m_s]
       )
       VALUES
       (
@@ -2317,8 +2371,11 @@ BEGIN
         @sample_compressed_current * 8,                                                                     -- sample_size_with_current_compression_setting(KB) - bigint
         @sample_compressed_desired * 8,                                                                     -- sample_size_with_requested_compression_setting(KB) - bigint
         @sample_compressed_desired,                                                                         -- sample_compressed_page_count bigint
-        @current_size,                                                                                      -- sample_pages_with_current_compression_setting - bigint
-        @estimated_compressed_size                                                                          -- sample_pages_with_requested_compression_setting - bigint
+        @current_size,                                                                                      -- pages_with_current_compression_setting - bigint
+        @estimated_compressed_size,                                                                         -- pages_with_requested_compression_setting - bigint
+        @seconds_to_populate_table_sample,                                                                  -- seconds_to_populate_table_sample - numeric(25,4),
+        @seconds_to_apply_compression,                                                                      -- seconds_to_apply_compression - numeric(25,4)
+        @time_estimated_to_apply_compression_h_m_s                                                          -- time_estimated_to_apply_compression_h_m_s - varchar(20)
       );
 
       IF @estimated_compressed_size IS NOT NULL
@@ -2638,6 +2695,9 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
        t1.index_type_desc,
        t1.partition_number,
        t1.estimation_status,
+       t1.seconds_to_populate_table_sample,
+       t1.seconds_to_apply_compression,
+       t1.time_estimated_to_apply_compression_h_m_s,
        t1.current_data_compression,
        t1.estimated_data_compression,
        t1.compression_ratio,
@@ -2664,7 +2724,7 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
        a.page_io_latch_wait_count,
        CAST(1. * a.page_io_latch_wait_in_ms / NULLIF(a.page_io_latch_wait_count ,0) AS DECIMAL(12,2)) AS page_io_latch_avg_wait_ms,
        a.page_io_latch_wait_in_ms AS total_page_io_latch_wait_in_ms,
-       CONVERT(VARCHAR(200), ((page_io_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_io_latch_wait_in_ms) / 1000), 0), 108) AS total_page_io_latch_wait_d_h_m_s,
+       CONVERT(VARCHAR(200), ((page_io_latch_wait_in_ms) / 1000) / 86400) + 'd:' + CONVERT(VARCHAR(20), DATEADD(s, ((page_io_latch_wait_in_ms) / 1000), 0), 108) AS total_page_io_latch_wait_h_m_s,
        a.last_datetime_obj_was_used,
        ISNULL(a.plan_cache_reference_count, 0) AS plan_cache_reference_count,
        a.fill_factor,
@@ -2680,8 +2740,8 @@ SELECT 'Check 45 - Estimate compression savings' AS Info,
        t1.[sample_size_with_current_compression_setting(KB)],
        t1.[sample_size_with_requested_compression_setting(KB)],
        t1.[sample_compressed_page_count],
-       t1.sample_pages_with_current_compression_setting,
-       t1.sample_pages_with_requested_compression_setting,
+       t1.pages_with_current_compression_setting,
+       t1.pages_with_requested_compression_setting,
        'SET NOCOUNT ON; ' + 
        CASE index_type_desc 
          WHEN 'HEAP' THEN
@@ -3003,6 +3063,9 @@ SELECT Info,
        index_type_desc,
        partition_number,
        estimation_status,
+       seconds_to_populate_table_sample,
+       seconds_to_apply_compression,
+       time_estimated_to_apply_compression_h_m_s,
        current_data_compression,
        estimated_data_compression,
        compression_ratio,
@@ -3029,7 +3092,7 @@ SELECT Info,
        page_io_latch_wait_count,
        page_io_latch_avg_wait_ms,
        total_page_io_latch_wait_in_ms,
-       total_page_io_latch_wait_d_h_m_s,
+       total_page_io_latch_wait_h_m_s,
        last_datetime_obj_was_used,
        plan_cache_reference_count,
        fill_factor,
@@ -3045,8 +3108,8 @@ SELECT Info,
        [sample_size_with_current_compression_setting(KB)],
        [sample_size_with_requested_compression_setting(KB)],
        sample_compressed_page_count,
-       sample_pages_with_current_compression_setting,
-       sample_pages_with_requested_compression_setting,
+       pages_with_current_compression_setting,
+       pages_with_requested_compression_setting,
        none_compression_ratio,
        row_compression_ratio,
        page_compression_ratio,
