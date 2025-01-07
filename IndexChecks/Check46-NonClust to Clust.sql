@@ -184,7 +184,7 @@ CROSS APPLY (SELECT CASE
                         CONVERT(
                           VARCHAR,
                           CONVERT(
-                            NUMERIC(18, 2), ((ISNULL(b.[user_lookups], 0) * 1.00) / ISNULL(a.[user_seeks], 0)) * 100.0))
+                            NUMERIC(18, 2), ((ISNULL(a.[user_seeks], 0) * 1.00) / ISNULL(b.[user_lookups], 0)) * 100.0))
                         + '%'
                     END AS ratio_of_index_seeks_vs_base_table_lookups) AS Tab2
 WHERE 1 = 1
