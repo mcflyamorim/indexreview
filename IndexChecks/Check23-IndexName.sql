@@ -89,6 +89,8 @@ SELECT 'Check23 - Index naming convention' AS [Info],
     OR a.Index_Name COLLATE Latin1_General_BIN2 LIKE '%Test%'
     OR (a.Index_Name COLLATE Latin1_General_BIN2 LIKE '%Backup%' AND a.Table_Name COLLATE Latin1_General_BIN2 NOT LIKE '%Backup%')
     OR a.Index_Name COLLATE Latin1_General_BIN2 LIKE '%_DTA_%'
+    OR a.Index_Name COLLATE Latin1_General_BIN2 LIKE '%yyyymmdd%'
+    OR a.Index_Name COLLATE Latin1_General_BIN2 LIKE '%[_]old%'
 
 SELECT * FROM dbo.tmpIndexCheck23
 ORDER BY current_number_of_rows_table DESC, 
