@@ -707,6 +707,7 @@ try
 				Add-ConditionalFormatting -WorkSheet $ws -Address $Range -DataBarColor Green
 			}
 			elseif ($ColValue -like '*comment*') {
+                Set-ExcelColumn -Worksheet $ws -Column $i -Width 50
 				$c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
 				$c3 = $c1 + ($ResultRowCount + [int]($NumberOfRowsDescription + 3))
 				$Range = $c2 + ':' + $c3 | Out-String
