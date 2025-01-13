@@ -1971,6 +1971,20 @@ RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 SELECT @statusMsg = '[' + CONVERT(NVARCHAR(200), GETDATE(), 120) + '] - ' + 'Updating plan_cache_reference_count and query_hashes columns.'
 RAISERROR (@statusMsg, 0, 0) WITH NOWAIT
 
+IF OBJECT_ID('tempdb.dbo.#tmp_query_plan_index_list') IS NOT NULL
+  DROP TABLE #tmp_query_plan_index_list
+
+SELECT query_hash,
+       RTRIM(LTRIM(Tab1.ColXML.value('@Ind', 'NVARCHAR(850)'))) AS index_name
+INTO #tmp_query_plan_index_list
+FROM (SELECT query_hash, number_of_referenced_indexes, index_list,
+             TRY_CONVERT(XML, '<Test Ind="' + REPLACE(CONVERT(VARCHAR(MAX), index_list), ',','"/><Test Ind="') + '"/>') AS ColXML
+        FROM tempdb.dbo.tmpIndexCheckCachePlanData) AS Tab
+CROSS APPLY Tab.ColXML.nodes('/Test') As Tab1 (ColXML)
+WHERE CONVERT(NVARCHAR(MAX), index_list) <> ''
+
+CREATE CLUSTERED INDEX ix1 ON #tmp_query_plan_index_list (index_name)
+
 IF OBJECT_ID('tempdb.dbo.#tmp_query_hash') IS NOT NULL
   DROP TABLE #tmp_query_hash
 
@@ -1979,8 +1993,8 @@ INTO #tmp_query_hash
 FROM dbo.Tab_GetIndexInfo
 CROSS APPLY (SELECT '(' + fqn_index_name + ')') AS Tab1(Col1)
 CROSS APPLY (SELECT query_hash
-               FROM dbo.tmpIndexCheckCachePlanData
-              WHERE CONVERT(NVARCHAR(MAX), tmpIndexCheckCachePlanData.index_list) COLLATE Latin1_General_BIN2 LIKE '%' + REPLACE(REPLACE(Tab1.Col1,'[','!['),']','!]') + '%' ESCAPE '!') AS Tab2(query_hash)
+               FROM #tmp_query_plan_index_list
+              WHERE #tmp_query_plan_index_list.index_name = Tab1.Col1) AS Tab2(query_hash)
 OPTION (MAXDOP 1)
 
 --SELECT count_query_hash, STUFF(query_hashes, 1, 1, '')
