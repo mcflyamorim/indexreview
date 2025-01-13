@@ -87,7 +87,7 @@ END
 IF OBJECT_ID('dbo.Tab_GetIndexInfo') IS NOT NULL
 BEGIN
   /* 
-     I'm assuming data for all tables exists, but I'm only checking tmp_stats... 
+     I'm assuming data for all tables exists, but I'm only checking Tab_GetIndexInfo... 
      if you're not sure if this is ok, use @refreshdata = 1 to force the refresh and 
      table population
   */
@@ -738,7 +738,7 @@ CREATE TABLE dbo.tmpIndexCheckCachePlanData
   [last_returned_rows] [bigint] NULL
 )
 
-CREATE CLUSTERED INDEX ix_query_hash ON tmpStatsCheckCachePlanData(query_hash);
+CREATE CLUSTERED INDEX ix_query_hash ON tmpIndexCheckCachePlanData(query_hash);
 
 DECLARE @ctp INT;
 SELECT  @ctp = CAST(value AS INT)
