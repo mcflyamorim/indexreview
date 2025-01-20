@@ -1979,7 +1979,7 @@ SELECT query_hash,
 INTO #tmp_query_plan_index_list
 FROM (SELECT query_hash, number_of_referenced_indexes, index_list,
              TRY_CONVERT(XML, '<Test Ind="' + REPLACE(CONVERT(VARCHAR(MAX), index_list), ',','"/><Test Ind="') + '"/>') AS ColXML
-        FROM tempdb.dbo.tmpIndexCheckCachePlanData) AS Tab
+        FROM dbo.tmpIndexCheckCachePlanData) AS Tab
 CROSS APPLY Tab.ColXML.nodes('/Test') As Tab1 (ColXML)
 WHERE CONVERT(NVARCHAR(MAX), index_list) <> ''
 

@@ -84,8 +84,9 @@ BEGIN
   );
 
   SET @sqlcmd
-     = N'SELECT database_id, name, is_read_only, [state], 0 FROM master.sys.databases (NOLOCK) 
-                 WHERE name <> ''tempdb'' and state_desc = ''ONLINE'' and is_read_only = 0';
+     = N'SELECT database_id, name, is_read_only, [state], 0 FROM sys.databases (NOLOCK) 
+                 WHERE name <> ''tempdb'' and state_desc = ''ONLINE'' and is_read_only = 0
+                 AND name in (select Database_Name FROM dbo.Tab_GetIndexInfo)';
   INSERT INTO #tmpdbs0
   (
      [dbid],
