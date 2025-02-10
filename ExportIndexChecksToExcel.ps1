@@ -1,4 +1,4 @@
-﻿<#
+<#
     .SYNOPSIS
     Export SQL Server Index Checks to Excel
     .DESCRIPTION
@@ -547,7 +547,7 @@ else{
 
 try
 {
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
+	$Result = Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -Database $UserDatabase -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
 
 	if (($Result -eq 5 <#Azure DB#>) -or ($Result -eq 8 <#SQL Managed Instance#>)) {
         if ([string]::IsNullOrEmpty($Database)){
@@ -565,15 +565,15 @@ try
         {
             Write-Msg "Running proc sp_GetIndexInfo, this may take a while to run, be patient."
             $TsqlFile = $IndexChecksFolderPath + '0 - sp_GetIndexInfo.sql'
-		    Invoke-SqlCmd @Params -ServerInstance $instance -InputFile $TsqlFile -ErrorAction Stop
+		    Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -InputFile $TsqlFile -ErrorAction Stop
 
             #Using -Verbose to capture SQL Server message output
 		    if ($Database){
                 $Query1 = "EXEC dbo.sp_GetIndexInfo @database_name_filter = '$Database', @refreshdata = 1"
-                Invoke-SqlCmd @Params -ServerInstance $instance -Query $Query1 -Verbose -ErrorAction Stop
+                Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -Query $Query1 -Verbose -ErrorAction Stop
             }
             else{
-                Invoke-SqlCmd @Params -ServerInstance $instance -Query "EXEC dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
+                Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -Query "EXEC dbo.sp_GetIndexInfo @refreshdata = 1" -Verbose -ErrorAction Stop
             }
             Write-Msg "Finished to run sp_GetIndexInfo"
         }
@@ -586,7 +586,7 @@ try
 	}
 
 	#Checking if Tab_GetIndexInfo table already exist
-	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Query "SELECT ISNULL(OBJECT_ID('dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
+	$Result = Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -Query "SELECT ISNULL(OBJECT_ID('dbo.Tab_GetIndexInfo'),0) AS [ObjID]" -ErrorAction Stop | Select-Object -ExpandProperty ObjID
 
 	if ($Result -eq 0) {
 		Write-Msg "Could not find table dbo.Tab_GetIndexInfo, make sure you've executed Proc sp_GetIndexInfo to populate it." -Level Error
@@ -608,7 +608,7 @@ try
         Write-Msg $str
 
         try{
-        	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
+        	$Result = Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $filename.fullname -Verbose -ErrorAction Stop
         }
         catch 
         {
@@ -765,8 +765,8 @@ try
         $SummaryTsqlFile = $IndexChecksFolderPath + '0 - Summary.sql'
         [string]$str = "Starting to run [$SummaryTsqlFile] script"
         Write-Msg -Message $str
-        $Result = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
-        $ResultChart1 = Invoke-SqlCmd @Params -ServerInstance $instance -MaxCharLength 10000000 `
+        $Result = Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -MaxCharLength 10000000 -InputFile $SummaryTsqlFile -ErrorAction Stop
+        $ResultChart1 = Invoke-SqlCmd -TrustServerCertificate @Params -ServerInstance $instance -MaxCharLength 10000000 `
                             -Query "SELECT prioritycol, COUNT(*) AS cnt FROM dbo.tmpIndexCheckSummary WHERE prioritycol <> 'NA' GROUP BY prioritycol" `
                             -ErrorAction Stop
         [string]$str = "Finished to run [$SummaryTsqlFile] script"
