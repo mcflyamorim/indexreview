@@ -208,7 +208,7 @@ $IndexChecksFolderPath = "$PSScriptRoot\IndexChecks\"
 if ($LogFilePath -notlike '*\'){
     $LogFilePath = $LogFilePath + "\"
 }
-if(!(Test-Path $LogFilePath ))
+if(-not (Test-Path $LogFilePath ))
 {
     try {
         Write-Msg -Message "Creating directory: $LogFilePath" -VerboseMsg
@@ -220,7 +220,7 @@ if(!(Test-Path $LogFilePath ))
 }
 # Check if $LogFilePathQueryPlans directory exists, if not, create it.
 $LogFilePathQueryPlans = $LogFilePath + "QueryPlans_" + $CurrentDate.ToString("yyyyMMdd") + "_" + $CurrentDate.ToString("hhmm")
-if(!(Test-Path $LogFilePathQueryPlans))
+if(-not (Test-Path $LogFilePathQueryPlans))
 {
     try {
         Write-Msg -Message "Creating directory: $LogFilePathQueryPlans'" -VerboseMsg
@@ -278,7 +278,7 @@ if(-not (Get-Module -Name ImportExcel))
                 }
             }
             if ($null -eq $localpath) {
-                if (!(Test-Path -Path $userpath)) {
+                if (-not (Test-Path -Path $userpath)) {
                     try {
                         Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
                         New-Item -Path $userpath -ItemType Directory | Out-Null
@@ -294,7 +294,7 @@ if(-not (Get-Module -Name ImportExcel))
                 Write-Msg -Message "Updating current install" -VerboseMsg
             }
             $path = $localpath
-            if (!(Test-Path -Path $path)) {
+            if (-not (Test-Path -Path $path)) {
                 try {
                     Write-Msg -Message "Creating directory: $path" -VerboseMsg
                     New-Item -Path $path -ItemType Directory | Out-Null
@@ -368,7 +368,7 @@ if(-not (Get-Module -Name SqlServer))
                 }
             }
             if ($null -eq $localpath) {
-                if (!(Test-Path -Path $userpath)) {
+                if (-not (Test-Path -Path $userpath)) {
                     try {
                         Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
                         New-Item -Path $userpath -ItemType Directory | Out-Null
@@ -384,7 +384,7 @@ if(-not (Get-Module -Name SqlServer))
                 Write-Msg -Message "Updating current install" -VerboseMsg
             }
             $path = $localpath
-            if (!(Test-Path -Path $path)) {
+            if (-not (Test-Path -Path $path)) {
                 try {
                     Write-Msg -Message "Creating directory: $path" -VerboseMsg
                     New-Item -Path $path -ItemType Directory | Out-Null
@@ -459,7 +459,7 @@ if ($instance -like "*database.windows.net*"){
                     }
                 }
                 if ($null -eq $localpath) {
-                    if (!(Test-Path -Path $userpath)) {
+                    if (-not (Test-Path -Path $userpath)) {
                         try {
                             Write-Msg -Message "Creating directory: $userpath" -VerboseMsg
                             New-Item -Path $userpath -ItemType Directory | Out-Null
@@ -475,7 +475,7 @@ if ($instance -like "*database.windows.net*"){
                     Write-Msg -Message "Updating current install" -VerboseMsg
                 }
                 $path = $localpath
-                if (!(Test-Path -Path $path)) {
+                if (-not (Test-Path -Path $path)) {
                     try {
                         Write-Msg -Message "Creating directory: $path" -VerboseMsg
                         New-Item -Path $path -ItemType Directory | Out-Null
@@ -547,6 +547,8 @@ else{
 
 try
 {
+    $Params.TrustServerCertificate = $true
+    $Params.Encrypt = "Mandatory"
 	$Result = Invoke-SqlCmd @Params -ServerInstance $instance -Database $UserDatabase -Query "SELECT SERVERPROPERTY('EngineEdition') AS SeverEngineEdition" -ErrorAction Stop | Select-Object -ExpandProperty SeverEngineEdition
 
 	if (($Result -eq 5 <#Azure DB#>) -or ($Result -eq 8 <#SQL Managed Instance#>)) {
@@ -661,6 +663,9 @@ try
         $ws.Cells["A1"].Value = $CheckDescription | Select-Object -ExpandProperty Info | Out-String
 
         $ws.View.ZoomScale = 90
+        $dimension = $ws.Dimension
+        $address = $dimension.address
+        Set-Format -Worksheet $ws -Range $address -FontName 'Lucida Console' -FontSize 9        
 
 		$a = 65..90 | %{[char]$_}
         $a += 65..90 | %{'A' + [char]$_}
@@ -670,6 +675,14 @@ try
 			$c2 = $c1 + '2' 
 			$c2 = $c1 + ($NumberOfRowsDescription + 3).ToString()
 			$ColValue = $ws.Cells["$c2"].Value
+
+                # Access the column and get its width
+                $column = $ws.Column($i)
+                $columnWidth = $column.Width
+                if ($columnWidth -gt 50) 
+                {
+                    Set-ExcelColumn -Worksheet $ws -Column $i -Width 50
+                }            
 
 			if ($ColValue -like '*number_of_rows*'){
 				$c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
@@ -715,11 +728,12 @@ try
 				Add-ConditionalFormatting -WorkSheet $ws -Range $Range -RuleType NotEqual `
 											-ConditionValue 'OK' -ForeGroundColor "Red"
 			}
-            elseif ($ColValue -like '*datetime*') {
+            elseif ($ColValue -like '*date*') {
                 $c2 = $c1 + ($NumberOfRowsDescription + 4).ToString()
 				$c3 = $c1 + ($ResultRowCount + [int]($NumberOfRowsDescription + 3))
 				$Range = $c2 + ':' + $c3 | Out-String
 				$ws.Cells["$Range"].Style.Numberformat.Format = (Expand-NumberFormat -NumberFormat 'yyyy-mm-dd hh:mm:ss.000')
+                Set-ExcelColumn -Worksheet $ws -Column $i -Width 30 -HorizontalAlignment Center
             }
             elseif (($ColValue -like '*statement_plan*') -Or ($ColValue -like '*included*') -Or ($ColValue -like '*statement_text*') -Or ($ColValue -like '*indexed_columns*') -Or ($ColValue -like '*index_list*') -Or ($ColValue -like '*stats_list*') -Or ($ColValue -like '*object_code_definition*') -Or ($ColValue -like '*referenced_columns*')) {
                 Set-ExcelColumn -Worksheet $ws -Column $i -Width 30
@@ -742,7 +756,7 @@ try
                 {
                     $dt = Get-Date -Format 'yyyy-MM-dd hh:mm:ss'
                     
-                    if (![string]::IsNullOrEmpty($row.statement_plan)) { 
+                    if (-not [string]::IsNullOrEmpty($row.statement_plan)) { 
                         $row.statement_plan | Format-Table -AutoSize -Property * | Out-String -Width 2147483647 | Out-File -FilePath "$LogFilePathQueryPlans\QueryPlan_$($row.query_hash).sqlplan" -Encoding unicode -Force
                     }
                     $SecondsToRun = ((New-TimeSpan -Start $dt -End (Get-Date)).Seconds) + ((New-TimeSpan -Start $dt -End (Get-Date)).Minutes * 60)
